@@ -42,3 +42,19 @@ def get_user_chat_logs(user_id: int, limit: int, db: Session) -> List[ChatLog]:
         .limit(limit)
         .all()
     )
+
+# [안내서 대비 변경] 안내서 시그니처는 (skip=0, limit=100, db=None)이지만,
+# db 없이 호출되면 내부에서 AttributeError가 나므로 세 인자를 모두 필수로 받음
+# (skip/limit 기본값은 로그 조회 라우터에서 지정)
+def get_all_chat_logs(skip: int, limit: int, db: Session) -> List[ChatLog]:
+    """
+    [관리자/평가자 확인용] 전체 사용자의 대화 로그를 최신순으로 페이지 단위 조회
+    """
+    return (
+        db.query(ChatLog)
+        # [안내서 대비 변경] get_user_chat_logs와 같은 기준으로 정렬 (같은 시각이면 id 역순)
+        .order_by(ChatLog.created_at.desc(), ChatLog.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
