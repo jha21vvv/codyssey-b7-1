@@ -1,3 +1,4 @@
+from typing import List
 from sqlalchemy.orm import Session
 from app.models.chat_log import ChatLog
 
@@ -28,3 +29,16 @@ def save_chat_log(user_id: int, prompt: str, response: str, status: str, db: Ses
         raise
     db.refresh(log)
     return log
+
+def get_user_chat_logs(user_id: int, limit: int, db: Session) -> List[ChatLog]:
+    """
+    [조명환의 컨텍스트 빌더용] 해당 사용자의 가장 최근 대화 N개를 최신순으로 반환
+    """
+    return (
+        db.query(ChatLog)
+        .filter(ChatLog.user_id == user_id)
+        # [안내서 대비 변경] 저장 시각이 같으면 순서가 보장되지 않아 id를 보조 정렬 기준으로 추가
+        .order_by(ChatLog.created_at.desc(), ChatLog.id.desc())
+        .limit(limit)
+        .all()
+    )
