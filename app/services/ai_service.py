@@ -1,4 +1,7 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+import httpx
+from app.core.config import settings
+from app.core.logger import logger
 
 """
 [조명환 전담] AI 챗봇 비즈니스 로직, 입력 검증, 컨텍스트 빌더 및 비동기 API 클라이언트
@@ -9,6 +12,7 @@ from typing import Any, Dict, List
 
 MAX_PROMPT_LENGTH = 1000
 SYSTEM_PROMPT = "당신은 Codyssey B7-1 친절하고 유능한 AI 어시스턴트입니다."
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
 
 def validate_prompt(prompt: str) -> str:
@@ -41,4 +45,36 @@ def build_chat_context(recent_logs: List[Any], current_prompt: str) -> List[Dict
 
     messages.append({"role": "user", "content": current_prompt})
     return messages
+
+
+async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
+    """
+    [과제 요구사항 58, 70, 101] AI API 호출 및 타임아웃 방어
+    Returns: (응답텍스트, 상태코드 문자열 "SUCCESS" | "FAILED")
+    """
+    logger.info(
+        f"[AI 호출] [AI 호출 시작] 모델={settings.AI_MODEL_NAME}, "
+        f"메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {settings.AI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": settings.AI_MODEL_NAME,
+        "messages": messages,
+        "temperature": 0.7,
+    }
+
+    async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
+        res = await client.post(OPENAI_API_URL, headers=headers, json=payload)
+        if res.status_code == 200:
+            data = res.json()
+            reply = data["choices"][0]["message"]["content"]
+            logger.info("[AI 응답 수신] [AI 응답 수신 성공] status=200")
+            return reply, "SUCCESS"
+        logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
+        return "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요.", "FAILED"
+
 
