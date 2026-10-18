@@ -14,6 +14,9 @@ MAX_PROMPT_LENGTH = 1000
 SYSTEM_PROMPT = "당신은 Codyssey B7-1 친절하고 유능한 AI 어시스턴트입니다."
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 
+FALLBACK_ERROR_MESSAGE = "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요."
+FALLBACK_TIMEOUT_MESSAGE = "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요."
+
 
 def validate_prompt(prompt: str) -> str:
     """
@@ -57,6 +60,10 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
         f"메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
     )
 
+    if not settings.AI_API_KEY or settings.AI_API_KEY.strip() in ("", "your-actual-api-key-here"):
+        logger.error("[AI 응답 실패] [AI 호출 실패] 유효한 AI_API_KEY가 설정되지 않았습니다.")
+        return FALLBACK_ERROR_MESSAGE, "FAILED"
+
     headers = {
         "Authorization": f"Bearer {settings.AI_API_KEY}",
         "Content-Type": "application/json",
@@ -76,10 +83,14 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
                 logger.info("[AI 응답 수신] [AI 응답 수신 성공] status=200")
                 return reply, "SUCCESS"
             logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
-            return "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요.", "FAILED"
+            return FALLBACK_ERROR_MESSAGE, "FAILED"
     except httpx.TimeoutException:
         logger.error(f"[AI 응답 실패] [AI 타임아웃] {settings.AI_TIMEOUT_SECONDS}초 초과")
-        return "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요.", "FAILED"
+        return FALLBACK_TIMEOUT_MESSAGE, "FAILED"
+    except Exception as e:
+        logger.error(f"[AI 응답 실패] [AI 통신 예외 발생] {str(e)}")
+        return f"서비스 처리 중 일시적인 오류가 발생했습니다: {str(e)}", "FAILED"
+
 
 
 
