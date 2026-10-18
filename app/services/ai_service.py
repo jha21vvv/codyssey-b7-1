@@ -67,14 +67,19 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
         "temperature": 0.7,
     }
 
-    async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
-        res = await client.post(OPENAI_API_URL, headers=headers, json=payload)
-        if res.status_code == 200:
-            data = res.json()
-            reply = data["choices"][0]["message"]["content"]
-            logger.info("[AI 응답 수신] [AI 응답 수신 성공] status=200")
-            return reply, "SUCCESS"
-        logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
-        return "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요.", "FAILED"
+    try:
+        async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
+            res = await client.post(OPENAI_API_URL, headers=headers, json=payload)
+            if res.status_code == 200:
+                data = res.json()
+                reply = data["choices"][0]["message"]["content"]
+                logger.info("[AI 응답 수신] [AI 응답 수신 성공] status=200")
+                return reply, "SUCCESS"
+            logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
+            return "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요.", "FAILED"
+    except httpx.TimeoutException:
+        logger.error(f"[AI 응답 실패] [AI 타임아웃] {settings.AI_TIMEOUT_SECONDS}초 초과")
+        return "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요.", "FAILED"
+
 
 
