@@ -12,6 +12,7 @@
     질문 입력과 AI 응답을 같은 화면의 말풍선으로 보여줍니다.
   -->
   <header class="app-header">
+    <button type="button" id="sidebar-toggle" class="icon-btn sidebar-toggle" aria-label="지난 대화 보기" aria-controls="history-sidebar" aria-expanded="false">☰</button>
     <h1 class="app-title">Codyssey B7-1 AI 챗봇</h1>
     <div id="auth-info" class="auth-info"></div>
   </header>
@@ -22,6 +23,13 @@
   </div>
 
   <div class="app-body">
+    <aside id="history-sidebar" class="history-sidebar" aria-label="지난 대화">
+      <h2 class="sidebar-title">지난 대화</h2>
+      <p id="history-status" class="history-status">로그인하면 지난 대화가 여기에 표시됩니다.</p>
+      <ul id="history-list" class="history-list"></ul>
+    </aside>
+    <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+
     <main class="chat-panel">
       <section id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-label="대화 내용">
         <div class="message assistant welcome">안녕하세요! 궁금한 점을 입력하면 AI가 답변해 드려요.</div>

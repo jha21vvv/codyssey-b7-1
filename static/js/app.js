@@ -21,13 +21,20 @@
   const loginNotice = $("#login-notice");
   const errorBanner = $("#error-banner");
   const errorBannerText = $("#error-banner-text");
-  let isSending = false; // AI 응답을 기다리는 중인지 (중복 전송 방지)
+  const welcomeMessage = chatMessages.querySelector(".welcome");
+  const historyList = $("#history-list");
+  const historyStatus = $("#history-status");
+  const sidebarToggle = $("#sidebar-toggle");
+  const sidebarBackdrop = $("#sidebar-backdrop");
   const authInfo = $("#auth-info");
   const authModal = $("#auth-modal");
   const loginForm = $("#login-form");
   const registerForm = $("#register-form");
   const loginMessage = $("#login-message");
   const registerMessage = $("#register-message");
+
+  let isSending = false; // AI 응답을 기다리는 중인지 (중복 전송 방지)
+  let entrySeq = 0; // 새로 보낸 질문의 사이드바 항목과 말풍선을 잇는 번호
 
   // ---------- 로그인 상태 저장 ----------
   const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -173,6 +180,9 @@
       closeAuthModal();
       hideBanner();
       updateAuthState();
+      // 다른 계정의 대화가 남지 않도록 대화창을 비우고, 이 사용자의 지난 대화를 서버에서 다시 불러옴
+      resetConversation();
+      loadHistory();
     } catch {
       setFormMessage(loginMessage, "서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
     } finally {
@@ -222,16 +232,32 @@
     apiRequest("/api/auth/logout", { method: "POST", auth: true }).catch(() => {});
     clearAuth();
     updateAuthState();
+    resetConversation();
+    closeSidebar();
   }
 
   // ---------- 말풍선 ----------
-  function appendMessage(role, text, status) {
+  // entryKey: 사이드바 항목을 눌렀을 때 찾아갈 질문 말풍선 표시
+  function createBubble(role, text, status, entryKey) {
     const bubble = document.createElement("div");
     bubble.className = `message ${role}`;
+    if (entryKey) bubble.dataset.entry = entryKey;
     setMessageContent(bubble, text, status);
+    return bubble;
+  }
+
+  function appendMessage(role, text, status, entryKey) {
+    const bubble = createBubble(role, text, status, entryKey);
     chatMessages.append(bubble);
     scrollToBottom();
     return bubble;
+  }
+
+  // 로그아웃·재로그인 시 이전 사용자의 대화가 화면에 남지 않도록 첫 인사만 남기고 비움
+  function resetConversation() {
+    chatMessages.querySelectorAll(":scope > :not(.welcome)").forEach((element) => element.remove());
+    historyList.replaceChildren();
+    updateHistoryStatus();
   }
 
   // [안내서 대비 변경] 안내서의 "⏳ ...작성하고 있습니다" 문구 대신 점 3개 애니메이션을 보여주고, 같은 문구는 스크린리더용으로 남김
@@ -317,7 +343,9 @@
     }
     hideInputHint();
 
-    appendMessage("user", prompt);
+    const entryKey = `new-${++entrySeq}`;
+    const sentToken = getToken();
+    appendMessage("user", prompt, "SUCCESS", entryKey);
     chatInput.value = "";
     onInputChange();
     const reply = appendLoadingMessage();
@@ -326,9 +354,14 @@
     try {
       // 신재은 get_current_user가 읽는 Authorization: Bearer 헤더를 붙여 전송
       const { res, data } = await apiRequest("/api/chat", { method: "POST", body: { prompt }, auth: true });
+      // 응답을 기다리는 사이 로그아웃했거나 다른 계정으로 바뀌었으면 결과를 화면에 반영하지 않음
+      if (getToken() !== sentToken) return;
 
       if (res.status === 401) {
         handleSessionExpired(reply);
+        // 다시 로그인하면 대화창을 서버 기록으로 새로 그리므로, 보내지 못한 질문은 입력창에 돌려둠
+        chatInput.value = prompt;
+        onInputChange();
         return;
       }
       // [안내서 대비 변경] 안내서 코드는 422·500 응답에서도 data.response를 그대로 써 "undefined"가 표시되므로 상태별로 안내
@@ -344,6 +377,9 @@
       // AI 호출이 실패·타임아웃이어도 서버는 200 + status "FAILED" + 안내 문구를 주므로 같은 화면에 그대로 표시
       setMessageContent(reply, data.response, data.status);
       hideBanner();
+      // 서버는 FAILED 응답도 대화 로그로 저장하므로 사이드바에도 바로 추가
+      historyList.prepend(createHistoryItem(entryKey, prompt, data.status, new Date()));
+      updateHistoryStatus();
     } catch {
       setMessageContent(reply, "⚠️ 네트워크 통신 오류가 발생했습니다.", "FAILED");
       showBanner("서버와 연결할 수 없습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.");
@@ -352,9 +388,9 @@
     }
   }
 
-  // 토큰이 만료됐거나 서버가 로그인을 거부한 경우
+  // 토큰이 만료됐거나 서버가 로그인을 거부한 경우 (지난 대화 조회에서는 말풍선 없이 호출)
   function handleSessionExpired(bubble) {
-    setMessageContent(bubble, "❌ 세션이 만료되었습니다. 다시 로그인해주세요.", "FAILED");
+    if (bubble) setMessageContent(bubble, "❌ 세션이 만료되었습니다. 다시 로그인해주세요.", "FAILED");
     clearAuth();
     updateAuthState();
     // [안내서 대비 변경] 안내서 처리(토큰 삭제·입력창 잠금)에 더해 상단 배너로 알리고 로그인 모달을 바로 열어줌
@@ -362,7 +398,144 @@
     openAuthModal("login");
   }
 
+  // ---------- 지난 대화 (GET /api/logs/me) ----------
+  // 서버 created_at은 timezone 표시가 없는 UTC 시각이라 그대로 읽으면 브라우저가 한국 시각으로 오해함 → 'Z'를 붙여 UTC로 해석
+  function parseServerDate(value) {
+    if (typeof value !== "string" || !value) return null;
+    // 마이크로초(6자리)는 일부 브라우저가 읽지 못하므로 밀리초(3자리)까지만 사용
+    const normalized = value.replace(/(\.\d{3})\d+/, "$1");
+    const hasTimezone = /(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(normalized);
+    const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  function formatTime(date) {
+    if (!date) return "";
+    return date.toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function setHistoryStatus(text) {
+    historyStatus.textContent = text;
+    historyStatus.hidden = !text;
+  }
+
+  function updateHistoryStatus() {
+    if (historyList.children.length) setHistoryStatus("");
+    else setHistoryStatus(getToken() ? "아직 나눈 대화가 없습니다." : "로그인하면 지난 대화가 여기에 표시됩니다.");
+  }
+
+  function createHistoryItem(entryKey, prompt, status, date) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "history-item";
+    button.dataset.entry = entryKey;
+
+    const title = document.createElement("span");
+    title.className = "history-item-title";
+    title.textContent = prompt;
+    const meta = document.createElement("span");
+    meta.className = "history-item-meta";
+    const time = document.createElement("span");
+    time.textContent = formatTime(date);
+    meta.append(time);
+    if (status === "FAILED") {
+      const badge = document.createElement("span");
+      badge.className = "badge-failed";
+      badge.textContent = "응답 실패";
+      meta.append(badge);
+    }
+
+    button.append(title, meta);
+    button.addEventListener("click", () => focusEntry(entryKey));
+    item.append(button);
+    return item;
+  }
+
+  // 사이드바 항목을 누르면 대화창에서 그 질문으로 이동해 잠깐 강조
+  function focusEntry(entryKey) {
+    const bubble = chatMessages.querySelector(`.message[data-entry="${CSS.escape(entryKey)}"]`);
+    if (!bubble) return;
+    bubble.scrollIntoView({ block: "center", behavior: "smooth" });
+    bubble.classList.remove("highlight");
+    void bubble.offsetWidth; // 같은 항목을 다시 눌러도 강조 애니메이션이 다시 시작되도록 reflow
+    bubble.classList.add("highlight");
+    clearTimeout(bubble.highlightTimer);
+    bubble.highlightTimer = setTimeout(() => bubble.classList.remove("highlight"), 1600);
+    closeSidebar();
+  }
+
+  function renderHistory(logs) {
+    // id가 클수록 최근 대화: 사이드바는 최신순, 대화창은 오래된 순(대화 흐름 순서)으로 보여줌
+    const newestFirst = [...logs].sort((a, b) => b.id - a.id);
+    const fragment = document.createDocumentFragment();
+    [...newestFirst].reverse().forEach((log) => {
+      const entryKey = `log-${log.id}`;
+      fragment.append(
+        createBubble("user", log.prompt, "SUCCESS", entryKey),
+        createBubble("assistant", log.response, log.status),
+      );
+    });
+    if (newestFirst.length) {
+      const divider = document.createElement("div");
+      divider.className = "history-divider";
+      divider.setAttribute("role", "separator");
+      divider.textContent = "여기까지 지난 대화입니다";
+      fragment.append(divider);
+    }
+    // 불러오는 사이 새로 보낸 질문이 있어도 그 위(첫 인사 바로 아래)에 지난 대화를 넣음
+    welcomeMessage.after(fragment);
+
+    const items = newestFirst.map((log) => createHistoryItem(`log-${log.id}`, log.prompt, log.status, parseServerDate(log.created_at)));
+    historyList.append(...items);
+    updateHistoryStatus();
+    scrollToBottom();
+  }
+
+  async function loadHistory() {
+    const requestToken = getToken();
+    if (!requestToken) return;
+    setHistoryStatus("지난 대화를 불러오는 중...");
+    try {
+      const { res, data } = await apiRequest("/api/logs/me", { auth: true });
+      // 불러오는 사이 로그아웃했거나 다른 계정으로 바뀌었으면 결과를 버림
+      if (getToken() !== requestToken) return;
+      if (res.status === 401) {
+        handleSessionExpired();
+        return;
+      }
+      if (!res.ok || !Array.isArray(data)) {
+        setHistoryStatus("지난 대화를 불러오지 못했습니다.");
+        return;
+      }
+      renderHistory(data);
+    } catch {
+      if (getToken() === requestToken) setHistoryStatus("지난 대화를 불러오지 못했습니다.");
+    }
+  }
+
+  // ---------- 모바일 사이드바 ----------
+  function openSidebar() {
+    document.body.classList.add("sidebar-open");
+    sidebarBackdrop.hidden = false;
+    sidebarToggle.setAttribute("aria-expanded", "true");
+  }
+
+  function closeSidebar() {
+    document.body.classList.remove("sidebar-open");
+    sidebarBackdrop.hidden = true;
+    sidebarToggle.setAttribute("aria-expanded", "false");
+  }
+
   // ---------- 이벤트 연결 ----------
+  sidebarToggle.addEventListener("click", () => {
+    if (document.body.classList.contains("sidebar-open")) closeSidebar();
+    else openSidebar();
+  });
+  sidebarBackdrop.addEventListener("click", closeSidebar);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && document.body.classList.contains("sidebar-open")) closeSidebar();
+  });
   chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     sendChatMessage();
@@ -403,4 +576,6 @@
   });
 
   updateAuthState();
+  updateHistoryStatus();
+  loadHistory();
 })();

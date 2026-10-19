@@ -508,6 +508,158 @@ body {
   color: var(--color-success);
 }
 
+/* ---------- 지난 대화 사이드바 ---------- */
+.sidebar-toggle {
+  display: none;
+}
+
+.history-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 280px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+.sidebar-title {
+  margin: 0 8px 4px;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.history-status {
+  margin: 4px 8px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-item:hover {
+  background: var(--color-surface-muted);
+}
+
+.history-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.history-item-title {
+  overflow: hidden;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.history-item-meta {
+  display: flex;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.badge-failed {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+.history-divider {
+  align-self: center;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+/* 사이드바에서 고른 질문을 대화창에서 잠깐 강조 */
+.message.highlight {
+  animation: highlight-pulse 1.6s ease-out;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 45%, transparent);
+  }
+
+  100% {
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-toggle {
+    display: inline-flex;
+  }
+
+  /* 모바일에서는 왼쪽에서 밀려 나오는 서랍으로 바뀜 (닫혀 있을 때는 Tab 이동에서도 제외) */
+  .history-sidebar {
+    position: fixed;
+    top: var(--header-height);
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    width: min(300px, 85vw);
+    box-shadow: var(--shadow-md);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
+  }
+
+  body.sidebar-open .history-sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: var(--header-height) 0 0 0;
+    z-index: 10;
+    background: rgba(15, 17, 23, 0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.highlight {
+    animation: none;
+    outline: 3px solid var(--color-primary);
+  }
+
+  .history-sidebar {
+    transition: none;
+  }
+}
+
 /* 화면에는 숨기고 스크린리더에는 읽히게 하는 유틸리티 */
 .visually-hidden {
   position: absolute;
