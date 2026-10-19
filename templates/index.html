@@ -22,10 +22,19 @@
         <div class="message assistant welcome">안녕하세요! 궁금한 점을 입력하면 AI가 답변해 드려요.</div>
       </section>
 
+      <!-- 비로그인 상태가 기본: 로그인이 확인되면 app.js가 안내를 숨기고 입력창을 풀어줌 -->
+      <div id="login-notice" class="login-notice">
+        <span>🔒 챗봇은 로그인한 사용자만 이용할 수 있어요.</span>
+        <span class="login-notice-actions">
+          <button type="button" class="btn btn-secondary" data-open-modal="login">로그인</button>
+          <button type="button" class="btn btn-primary" data-open-modal="register">회원가입</button>
+        </span>
+      </div>
+
       <form id="chat-form" class="chat-form" autocomplete="off">
         <label for="chat-input" class="visually-hidden">질문 입력</label>
-        <textarea id="chat-input" name="prompt" rows="1" placeholder="AI에게 질문을 입력하세요..."></textarea>
-        <button type="submit" id="send-btn" class="btn btn-primary send-btn">전송</button>
+        <textarea id="chat-input" name="prompt" rows="1" placeholder="🔒 로그인 후 질문을 입력할 수 있습니다." disabled></textarea>
+        <button type="submit" id="send-btn" class="btn btn-primary send-btn" disabled>전송</button>
         <div class="chat-form-footer">
           <p id="input-hint" class="input-hint" role="alert" hidden></p>
           <span id="char-count" class="char-count">0 / 1000</span>

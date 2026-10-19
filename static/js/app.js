@@ -11,6 +11,9 @@
   const USERNAME_KEY = "username";
 
   const $ = (selector) => document.querySelector(selector);
+  const chatInput = $("#chat-input");
+  const sendBtn = $("#send-btn");
+  const loginNotice = $("#login-notice");
   const authInfo = $("#auth-info");
   const authModal = $("#auth-modal");
   const loginForm = $("#login-form");
@@ -87,7 +90,16 @@
   }
 
   function updateAuthState() {
+    const loggedIn = Boolean(getToken());
     renderAuthInfo();
+    // 비로그인 상태에서는 입력창과 전송 버튼을 잠금 (백엔드 401 차단과 함께 2중 방어, 업무분장안내서 규칙 3)
+    chatInput.disabled = !loggedIn;
+    sendBtn.disabled = !loggedIn;
+    chatInput.placeholder = loggedIn
+      ? "AI에게 질문을 입력하세요..."
+      : "🔒 로그인 후 질문을 입력할 수 있습니다.";
+    // [안내서 대비 변경] 안내서의 잠금·placeholder 처리에 더해, 입력창 위에 로그인/회원가입 버튼이 있는 안내 줄을 보여줌
+    loginNotice.hidden = loggedIn;
   }
 
   // ---------- 로그인 / 회원가입 모달 ----------
@@ -194,6 +206,9 @@
   registerForm.addEventListener("submit", handleRegister);
   document.querySelectorAll("[data-auth-mode]").forEach((tab) => {
     tab.addEventListener("click", () => setAuthMode(tab.dataset.authMode));
+  });
+  document.querySelectorAll("[data-open-modal]").forEach((button) => {
+    button.addEventListener("click", () => openAuthModal(button.dataset.openModal));
   });
   authModal.querySelector("[data-close-modal]").addEventListener("click", closeAuthModal);
 

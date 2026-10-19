@@ -230,6 +230,36 @@ body {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent);
 }
 
+.chat-form textarea:disabled {
+  background: var(--color-surface-muted);
+  cursor: not-allowed;
+}
+
+/* ---------- 비로그인 안내 ---------- */
+.login-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--color-surface-muted);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.login-notice-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.login-notice .btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
 .send-btn {
   align-self: end;
   height: 44px;
