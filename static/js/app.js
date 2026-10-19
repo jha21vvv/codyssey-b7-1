@@ -24,6 +24,7 @@
   const welcomeMessage = chatMessages.querySelector(".welcome");
   const historyList = $("#history-list");
   const historyStatus = $("#history-status");
+  const historyCount = $("#history-count");
   const sidebarToggle = $("#sidebar-toggle");
   const sidebarBackdrop = $("#sidebar-backdrop");
   const authInfo = $("#auth-info");
@@ -326,6 +327,17 @@
     chatInput.style.height = `${chatInput.scrollHeight + border}px`;
   }
 
+  // 추천 질문: 바로 보내지 않고 입력창에 채워 고칠 수 있게 함 (비로그인이면 로그인 창을 엶)
+  function useSuggestion(text) {
+    if (!getToken()) {
+      openAuthModal("login");
+      return;
+    }
+    chatInput.value = text;
+    onInputChange();
+    chatInput.focus();
+  }
+
   // ---------- 질문 전송 ----------
   function setSending(value) {
     isSending = value;
@@ -428,7 +440,11 @@
   }
 
   function updateHistoryStatus() {
-    if (historyList.children.length) setHistoryStatus("");
+    const count = historyList.children.length;
+    // 제목 옆에 지난 대화 수를 "총 N건"으로 표시
+    historyCount.textContent = count ? `총 ${count.toLocaleString("ko-KR")}건` : "";
+    historyCount.hidden = !count;
+    if (count) setHistoryStatus("");
     else setHistoryStatus(getToken() ? "아직 나눈 대화가 없습니다." : "로그인하면 지난 대화가 여기에 표시됩니다.");
   }
 
@@ -557,6 +573,9 @@
     }
   });
   chatInput.addEventListener("input", onInputChange);
+  document.querySelectorAll(".suggestion-chip").forEach((chip) => {
+    chip.addEventListener("click", () => useSuggestion(chip.textContent.trim()));
+  });
   loginForm.addEventListener("submit", handleLogin);
   registerForm.addEventListener("submit", handleRegister);
   document.querySelectorAll("[data-auth-mode]").forEach((tab) => {

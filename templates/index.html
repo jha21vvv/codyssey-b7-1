@@ -27,7 +27,10 @@
 
   <div class="app-body">
     <aside id="history-sidebar" class="history-sidebar" aria-label="지난 대화">
-      <h2 class="sidebar-title">지난 대화</h2>
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">지난 대화</h2>
+        <span id="history-count" class="history-count" hidden></span>
+      </div>
       <p id="history-status" class="history-status">로그인하면 지난 대화가 여기에 표시됩니다.</p>
       <ul id="history-list" class="history-list"></ul>
     </aside>
@@ -35,7 +38,17 @@
 
     <main class="chat-panel">
       <section id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-label="대화 내용">
-        <div class="message assistant welcome">안녕하세요! 궁금한 점을 입력하면 AI가 답변해 드려요.</div>
+        <!-- 대화가 없을 때만 보이는 안내 (말풍선이 생기면 CSS가 숨김) -->
+        <div class="welcome empty-state">
+          <span class="empty-icon" aria-hidden="true"></span>
+          <p class="empty-title">무엇이든 물어보세요</p>
+          <p class="empty-desc">궁금한 점을 입력하면 AI가 답변해 드려요.</p>
+          <div class="suggestions" role="group" aria-label="추천 질문">
+            <button type="button" class="suggestion-chip">FastAPI가 뭔지 쉽게 설명해줘</button>
+            <button type="button" class="suggestion-chip">파이썬 리스트와 튜플의 차이는?</button>
+            <button type="button" class="suggestion-chip">리눅스 기본 명령어 알려줘</button>
+          </div>
+        </div>
       </section>
 
       <!-- 비로그인 상태가 기본: 로그인이 확인되면 app.js가 안내를 숨기고 입력창을 풀어줌 -->
