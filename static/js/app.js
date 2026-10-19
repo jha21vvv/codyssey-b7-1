@@ -124,9 +124,11 @@
     // 응답을 기다리는 동안에는 다음 질문을 미리 쓸 수 있게 입력창은 두고 전송 버튼만 잠금
     chatInput.disabled = !loggedIn;
     sendBtn.disabled = !loggedIn || isSending;
+    // [안내서 대비 변경] 안내서 문구("🔒 로그인 후 질문을 입력할 수 있습니다.")는 휴대폰 화면에서 잘리므로 짧게 줄임
+    // (자세한 안내는 입력창 위 로그인 안내 줄이 담당, 단축키 안내는 입력창 아래 .keyboard-hint로 옮김)
     chatInput.placeholder = loggedIn
-      ? "AI에게 질문을 입력하세요... (Enter 전송, Shift+Enter 줄바꿈)"
-      : "🔒 로그인 후 질문을 입력할 수 있습니다.";
+      ? "AI에게 질문을 입력하세요..."
+      : "🔒 로그인이 필요합니다";
     // [안내서 대비 변경] 안내서의 잠금·placeholder 처리에 더해, 입력창 위에 로그인/회원가입 버튼이 있는 안내 줄을 보여줌
     loginNotice.hidden = loggedIn;
   }

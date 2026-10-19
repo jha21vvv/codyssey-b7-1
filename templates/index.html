@@ -46,11 +46,14 @@
 
       <form id="chat-form" class="chat-form" autocomplete="off">
         <label for="chat-input" class="visually-hidden">질문 입력</label>
-        <textarea id="chat-input" name="prompt" rows="1" placeholder="🔒 로그인 후 질문을 입력할 수 있습니다." disabled></textarea>
+        <textarea id="chat-input" name="prompt" rows="1" placeholder="🔒 로그인이 필요합니다" disabled></textarea>
         <button type="submit" id="send-btn" class="btn btn-primary send-btn" disabled>전송</button>
         <div class="chat-form-footer">
           <p id="input-hint" class="input-hint" role="alert" hidden></p>
-          <span id="char-count" class="char-count">0 / 1000</span>
+          <span class="form-meta">
+            <span class="keyboard-hint">Enter 전송 · Shift+Enter 줄바꿈</span>
+            <span id="char-count" class="char-count">0 / 1000</span>
+          </span>
         </div>
       </form>
     </main>

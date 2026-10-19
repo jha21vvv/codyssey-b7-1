@@ -68,6 +68,8 @@ body {
   background: var(--color-bg);
   color: var(--color-text);
   line-height: 1.5;
+  /* 한국어 단어가 음절 중간에서 줄바꿈되지 않게 함 (끊을 곳이 없는 긴 문자열은 .message의 overflow-wrap이 처리) */
+  word-break: keep-all;
 }
 
 /* ---------- 버튼 ---------- */
@@ -357,8 +359,19 @@ body {
   font-size: 0.85rem;
 }
 
-.char-count {
+.form-meta {
+  display: flex;
+  gap: 10px;
   margin-left: auto;
+  white-space: nowrap;
+}
+
+.keyboard-hint {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.char-count {
   color: var(--color-text-muted);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
@@ -706,5 +719,17 @@ body {
 
   .chat-form {
     padding: 10px 12px 12px;
+  }
+
+  /* 320px 화면에서도 입력창 안내 문구가 한 줄에 들어가도록 전송 버튼 여백을 줄임 */
+  .send-btn {
+    padding: 0 14px;
+  }
+}
+
+/* 터치 화면·좁은 화면에서는 물리 키보드 단축키 안내를 숨김 */
+@media (max-width: 640px), (pointer: coarse) {
+  .keyboard-hint {
+    display: none;
   }
 }
