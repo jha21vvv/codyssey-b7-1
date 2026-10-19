@@ -19,6 +19,7 @@
   const charCount = $("#char-count");
   const inputHint = $("#input-hint");
   const loginNotice = $("#login-notice");
+  let isSending = false; // AI 응답을 기다리는 중인지 (중복 전송 방지)
   const authInfo = $("#auth-info");
   const authModal = $("#auth-modal");
   const loginForm = $("#login-form");
@@ -98,8 +99,9 @@
     const loggedIn = Boolean(getToken());
     renderAuthInfo();
     // 비로그인 상태에서는 입력창과 전송 버튼을 잠금 (백엔드 401 차단과 함께 2중 방어, 업무분장안내서 규칙 3)
+    // 응답을 기다리는 동안에는 다음 질문을 미리 쓸 수 있게 입력창은 두고 전송 버튼만 잠금
     chatInput.disabled = !loggedIn;
-    sendBtn.disabled = !loggedIn;
+    sendBtn.disabled = !loggedIn || isSending;
     chatInput.placeholder = loggedIn
       ? "AI에게 질문을 입력하세요... (Enter 전송, Shift+Enter 줄바꿈)"
       : "🔒 로그인 후 질문을 입력할 수 있습니다.";
@@ -216,7 +218,27 @@
     return bubble;
   }
 
+  // [안내서 대비 변경] 안내서의 "⏳ ...작성하고 있습니다" 문구 대신 점 3개 애니메이션을 보여주고, 같은 문구는 스크린리더용으로 남김
+  function appendLoadingMessage() {
+    const bubble = document.createElement("div");
+    bubble.className = "message assistant loading";
+    bubble.setAttribute("aria-busy", "true");
+    const dots = document.createElement("span");
+    dots.className = "typing";
+    dots.setAttribute("aria-hidden", "true");
+    dots.append(document.createElement("span"), document.createElement("span"), document.createElement("span"));
+    const label = document.createElement("span");
+    label.className = "visually-hidden";
+    label.textContent = "AI가 답변을 작성하고 있습니다";
+    bubble.append(dots, label);
+    chatMessages.append(bubble);
+    scrollToBottom();
+    return bubble;
+  }
+
   function setMessageContent(bubble, text, status = "SUCCESS") {
+    bubble.classList.remove("loading");
+    bubble.removeAttribute("aria-busy");
     // 질문과 AI 응답은 항상 textContent로 넣어 HTML로 해석되지 않게 함 (XSS 방지)
     bubble.textContent = text;
     // [안내서 대비 변경] 안내서는 실패 시 글자색만 직접 바꾸지만, .failed 클래스로 말풍선 전체를 실패 스타일로 바꿈
@@ -255,7 +277,14 @@
   }
 
   // ---------- 질문 전송 ----------
+  function setSending(value) {
+    isSending = value;
+    chatForm.setAttribute("aria-busy", String(value));
+    updateAuthState();
+  }
+
   async function sendChatMessage() {
+    if (isSending) return;
     if (!getToken()) {
       openAuthModal("login");
       return;
@@ -275,7 +304,8 @@
     appendMessage("user", prompt);
     chatInput.value = "";
     onInputChange();
-    const reply = appendMessage("assistant", "AI가 답변을 작성하고 있습니다...");
+    const reply = appendLoadingMessage();
+    setSending(true);
 
     try {
       // 신재은 get_current_user가 읽는 Authorization: Bearer 헤더를 붙여 전송
@@ -298,6 +328,8 @@
       setMessageContent(reply, data.response, data.status);
     } catch {
       setMessageContent(reply, "⚠️ 네트워크 통신 오류가 발생했습니다.", "FAILED");
+    } finally {
+      setSending(false);
     }
   }
 
