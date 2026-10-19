@@ -13,7 +13,10 @@
   -->
   <header class="app-header">
     <button type="button" id="sidebar-toggle" class="icon-btn sidebar-toggle" aria-label="지난 대화 보기" aria-controls="history-sidebar" aria-expanded="false">☰</button>
-    <h1 class="app-title">Codyssey B7-1 AI 챗봇</h1>
+    <h1 class="app-title">
+      <span class="app-title-text">Codyssey B7-1</span>
+      <span class="app-badge">AI 챗봇</span>
+    </h1>
     <div id="auth-info" class="auth-info"></div>
   </header>
 
@@ -45,15 +48,17 @@
       </div>
 
       <form id="chat-form" class="chat-form" autocomplete="off">
-        <label for="chat-input" class="visually-hidden">질문 입력</label>
-        <textarea id="chat-input" name="prompt" rows="1" placeholder="🔒 로그인이 필요합니다" disabled></textarea>
-        <button type="submit" id="send-btn" class="btn btn-primary send-btn" disabled>전송</button>
+        <div class="composer">
+          <label for="chat-input" class="visually-hidden">질문 입력</label>
+          <textarea id="chat-input" name="prompt" rows="1" placeholder="🔒 로그인이 필요합니다" disabled></textarea>
+          <span id="char-count" class="char-count">0 / 1,000</span>
+          <button type="submit" id="send-btn" class="send-btn" aria-label="전송" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L7.5 3.64A1 1 0 0 0 6 4.5z"/></svg>
+          </button>
+        </div>
         <div class="chat-form-footer">
           <p id="input-hint" class="input-hint" role="alert" hidden></p>
-          <span class="form-meta">
-            <span class="keyboard-hint">Enter 전송 · Shift+Enter 줄바꿈</span>
-            <span id="char-count" class="char-count">0 / 1000</span>
-          </span>
+          <span class="keyboard-hint">↵ Enter 전송 · Shift+Enter 줄바꿈</span>
         </div>
       </form>
     </main>

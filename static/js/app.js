@@ -96,14 +96,20 @@
   function renderAuthInfo() {
     authInfo.replaceChildren();
     if (getToken()) {
+      const user = document.createElement("span");
+      user.className = "auth-user";
+      const avatar = document.createElement("span");
+      avatar.className = "avatar";
+      avatar.setAttribute("aria-hidden", "true");
       const name = document.createElement("span");
-      name.className = "auth-user";
-      name.textContent = `👤 ${localStorage.getItem(USERNAME_KEY) || "사용자"}님`;
-      authInfo.append(name, createButton("로그아웃", "btn btn-secondary", logout));
+      name.className = "auth-user-name";
+      name.textContent = `${localStorage.getItem(USERNAME_KEY) || "사용자"}님`;
+      user.append(avatar, name);
+      authInfo.append(user, createButton("로그아웃", "btn btn-light", logout));
     } else {
       authInfo.append(
-        createButton("로그인", "btn btn-secondary", () => openAuthModal("login")),
-        createButton("회원가입", "btn btn-primary", () => openAuthModal("register")),
+        createButton("로그인", "btn btn-light", () => openAuthModal("login")),
+        createButton("회원가입", "btn btn-bright", () => openAuthModal("register")),
       );
     }
   }
@@ -127,7 +133,7 @@
     // [안내서 대비 변경] 안내서 문구("🔒 로그인 후 질문을 입력할 수 있습니다.")는 휴대폰 화면에서 잘리므로 짧게 줄임
     // (자세한 안내는 입력창 위 로그인 안내 줄이 담당, 단축키 안내는 입력창 아래 .keyboard-hint로 옮김)
     chatInput.placeholder = loggedIn
-      ? "AI에게 질문을 입력하세요..."
+      ? "질문을 입력하세요..."
       : "🔒 로그인이 필요합니다";
     // [안내서 대비 변경] 안내서의 잠금·placeholder 처리에 더해, 입력창 위에 로그인/회원가입 버튼이 있는 안내 줄을 보여줌
     loginNotice.hidden = loggedIn;
@@ -307,7 +313,7 @@
   function onInputChange() {
     // 서버(validate_prompt)처럼 앞뒤 공백을 뺀 길이로 셈
     const length = chatInput.value.trim().length;
-    charCount.textContent = `${length} / ${MAX_PROMPT_LENGTH}`;
+    charCount.textContent = `${length.toLocaleString("ko-KR")} / ${MAX_PROMPT_LENGTH.toLocaleString("ko-KR")}`;
     charCount.classList.toggle("over", length > MAX_PROMPT_LENGTH);
     if (!inputHint.hidden && length > 0 && length <= MAX_PROMPT_LENGTH) hideInputHint();
     autoResize();
