@@ -78,6 +78,9 @@
     return typeof detail === "string" && detail ? detail : fallback;
   }
 
+  // 서버 쪽 문제(5xx)이거나 API가 아직 없는 경우(404·405)는 입력값 문제처럼 안내하지 않음
+  const isServerProblem = (status) => status >= 500 || status === 404 || status === 405;
+
   // ---------- 상단 에러 안내 배너 ----------
   // 네트워크·서버 오류와 세션 만료처럼 말풍선만으로는 놓치기 쉬운 상황을 화면 위쪽에 알림
   // (다음 질문이 성공하거나 다시 로그인하면 자동으로 닫힘)
@@ -180,8 +183,14 @@
         method: "POST",
         body: { username, password },
       });
-      if (!res.ok || !data || !data.access_token) {
-        setFormMessage(loginMessage, getErrorMessage(data, "아이디 또는 비밀번호를 확인해주세요."));
+      if (!res.ok) {
+        setFormMessage(loginMessage, isServerProblem(res.status)
+          ? `서버 오류로 로그인하지 못했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`
+          : getErrorMessage(data, "아이디 또는 비밀번호를 확인해주세요."));
+        return;
+      }
+      if (!data || !data.access_token) {
+        setFormMessage(loginMessage, "로그인 응답을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
         return;
       }
       saveAuth(data.access_token, (data.user && data.user.username) || username);
@@ -218,10 +227,15 @@
         body: { username, password },
       });
       if (!res.ok) {
-        const fallback = res.status === 422
-          ? "아이디는 3~50자, 비밀번호는 4~100자로 입력해주세요."
-          : "회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.";
-        setFormMessage(registerMessage, getErrorMessage(data, fallback));
+        let message;
+        if (isServerProblem(res.status)) {
+          message = `서버 오류로 가입하지 못했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`;
+        } else if (res.status === 422) {
+          message = getErrorMessage(data, "아이디는 3~50자, 비밀번호는 4~100자로 입력해주세요.");
+        } else {
+          message = getErrorMessage(data, "회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        }
+        setFormMessage(registerMessage, message);
         return;
       }
       registerForm.reset();
