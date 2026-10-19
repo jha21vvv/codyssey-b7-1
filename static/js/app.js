@@ -19,6 +19,8 @@
   const charCount = $("#char-count");
   const inputHint = $("#input-hint");
   const loginNotice = $("#login-notice");
+  const errorBanner = $("#error-banner");
+  const errorBannerText = $("#error-banner-text");
   let isSending = false; // AI 응답을 기다리는 중인지 (중복 전송 방지)
   const authInfo = $("#auth-info");
   const authModal = $("#auth-modal");
@@ -66,6 +68,19 @@
   function getErrorMessage(data, fallback) {
     const detail = data && data.detail;
     return typeof detail === "string" && detail ? detail : fallback;
+  }
+
+  // ---------- 상단 에러 안내 배너 ----------
+  // 네트워크·서버 오류와 세션 만료처럼 말풍선만으로는 놓치기 쉬운 상황을 화면 위쪽에 알림
+  // (다음 질문이 성공하거나 다시 로그인하면 자동으로 닫힘)
+  function showBanner(message) {
+    errorBannerText.textContent = message;
+    errorBanner.hidden = false;
+  }
+
+  function hideBanner() {
+    errorBanner.hidden = true;
+    errorBannerText.textContent = "";
   }
 
   // ---------- 헤더 로그인 정보 ----------
@@ -156,6 +171,7 @@
       saveAuth(data.access_token, (data.user && data.user.username) || username);
       loginForm.reset();
       closeAuthModal();
+      hideBanner();
       updateAuthState();
     } catch {
       setFormMessage(loginMessage, "서버와 연결할 수 없습니다. 잠시 후 다시 시도해주세요.");
@@ -322,12 +338,15 @@
       }
       if (!res.ok || !data || typeof data.response !== "string") {
         setMessageContent(reply, "서버에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", "FAILED");
+        showBanner(`서버 오류가 발생했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`);
         return;
       }
       // AI 호출이 실패·타임아웃이어도 서버는 200 + status "FAILED" + 안내 문구를 주므로 같은 화면에 그대로 표시
       setMessageContent(reply, data.response, data.status);
+      hideBanner();
     } catch {
       setMessageContent(reply, "⚠️ 네트워크 통신 오류가 발생했습니다.", "FAILED");
+      showBanner("서버와 연결할 수 없습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.");
     } finally {
       setSending(false);
     }
@@ -338,7 +357,8 @@
     setMessageContent(bubble, "❌ 세션이 만료되었습니다. 다시 로그인해주세요.", "FAILED");
     clearAuth();
     updateAuthState();
-    // [안내서 대비 변경] 안내서 처리(토큰 삭제·입력창 잠금)에 더해 로그인 모달을 바로 열어줌
+    // [안내서 대비 변경] 안내서 처리(토큰 삭제·입력창 잠금)에 더해 상단 배너로 알리고 로그인 모달을 바로 열어줌
+    showBanner("로그인이 만료되었습니다. 다시 로그인해주세요.");
     openAuthModal("login");
   }
 
@@ -365,6 +385,7 @@
     button.addEventListener("click", () => openAuthModal(button.dataset.openModal));
   });
   authModal.querySelector("[data-close-modal]").addEventListener("click", closeAuthModal);
+  $("#error-banner-close").addEventListener("click", hideBanner);
 
   // 모달 바깥(배경)을 눌렀다 뗐을 때만 닫음 (입력창에서 드래그하다 바깥에서 놓는 경우는 제외)
   let pointerDownOnBackdrop = false;
