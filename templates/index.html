@@ -33,5 +33,51 @@
       </form>
     </main>
   </div>
+
+  <dialog id="auth-modal" class="modal" aria-labelledby="auth-modal-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="auth-modal-title" class="modal-title">Codyssey 챗봇 계정</h2>
+        <button type="button" class="icon-btn" data-close-modal aria-label="닫기">✕</button>
+      </div>
+
+      <div class="modal-tabs" role="tablist" aria-label="로그인 또는 회원가입">
+        <button type="button" id="tab-login" class="modal-tab" role="tab" data-auth-mode="login" aria-controls="login-form" aria-selected="true">로그인</button>
+        <button type="button" id="tab-register" class="modal-tab" role="tab" data-auth-mode="register" aria-controls="register-form" aria-selected="false">회원가입</button>
+      </div>
+
+      <form id="login-form" class="auth-form" role="tabpanel" aria-labelledby="tab-login">
+        <label>
+          <span class="field-label">아이디</span>
+          <input name="username" type="text" autocomplete="username" required>
+        </label>
+        <label>
+          <span class="field-label">비밀번호</span>
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p id="login-message" class="form-message" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary">로그인</button>
+      </form>
+
+      <form id="register-form" class="auth-form" role="tabpanel" aria-labelledby="tab-register" hidden>
+        <label>
+          <span class="field-label">아이디 <span class="field-hint">3~50자</span></span>
+          <input name="username" type="text" autocomplete="username" minlength="3" maxlength="50" required>
+        </label>
+        <label>
+          <span class="field-label">비밀번호 <span class="field-hint">4~100자</span></span>
+          <input name="password" type="password" autocomplete="new-password" minlength="4" maxlength="100" required>
+        </label>
+        <label>
+          <span class="field-label">비밀번호 확인</span>
+          <input name="passwordConfirm" type="password" autocomplete="new-password" minlength="4" maxlength="100" required>
+        </label>
+        <p id="register-message" class="form-message" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary">회원가입</button>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="/static/js/app.js"></script>
 </body>
 </html>

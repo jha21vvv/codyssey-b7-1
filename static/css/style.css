@@ -262,6 +262,145 @@ body {
   font-weight: 700;
 }
 
+/* ---------- 헤더 로그인 정보 ---------- */
+.auth-user {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ---------- 로그인 / 회원가입 모달 ---------- */
+.modal {
+  width: min(400px, calc(100% - 32px));
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.modal::backdrop {
+  background: rgba(15, 17, 23, 0.5);
+}
+
+.modal-content {
+  padding: 8px 24px 24px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.modal-tabs {
+  display: flex;
+  margin: 12px 0 20px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-tab[aria-selected="true"] {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.field-hint {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.auth-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.auth-form .btn {
+  padding: 11px 14px;
+}
+
+.form-message {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.form-message.error {
+  color: var(--color-danger);
+}
+
+.form-message.success {
+  color: var(--color-success);
+}
+
 /* 화면에는 숨기고 스크린리더에는 읽히게 하는 유틸리티 */
 .visually-hidden {
   position: absolute;
@@ -283,6 +422,19 @@ body {
 
   .app-title {
     font-size: 0.95rem;
+  }
+
+  .auth-info {
+    gap: 6px;
+  }
+
+  .auth-info .btn {
+    padding: 6px 10px;
+    font-size: 0.85rem;
+  }
+
+  .auth-user {
+    max-width: 110px;
   }
 
   .chat-messages {
