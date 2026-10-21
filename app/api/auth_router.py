@@ -48,3 +48,12 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user": user
     }
+
+@router.post("/logout")
+def logout_user():
+    logger.info("[로그아웃 요청 완료]")
+    return {"message": "로그아웃 되었습니다. 클라이언트에서 토큰을 삭제해주세요."}
+
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
