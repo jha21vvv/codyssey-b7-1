@@ -30,3 +30,21 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
     
     logger.info(f"[회원가입 성공] user_id={new_user.id}, username={new_user.username}")
     return {"message": "회원가입이 완료되었습니다."}
+
+@router.post("/login", response_model=TokenResponse)
+def login_user(user_in: UserLogin, db: Session = Depends(get_db)):
+    logger.info(f"[로그인 시도] username={user_in.username}")
+    
+    user = db.query(User).filter(User.username == user_in.username).first()
+    if not user or not verify_password(user_in.password, user.hashed_password):
+        logger.warning(f"[로그인 실패] 인증 정보 불일치: username={user_in.username}")
+        raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    
+    access_token = create_access_token(data={"sub": user.username})
+    
+    logger.info(f"[로그인 성공] user_id={user.id}, username={user.username}")
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": user
+    }
