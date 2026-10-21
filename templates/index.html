@@ -92,7 +92,7 @@
       <form id="login-form" class="auth-form" role="tabpanel" aria-labelledby="tab-login">
         <label>
           <span class="field-label">아이디</span>
-          <input name="username" type="text" autocomplete="username" required>
+          <input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
         </label>
         <label>
           <span class="field-label">비밀번호</span>
@@ -104,8 +104,9 @@
 
       <form id="register-form" class="auth-form" role="tabpanel" aria-labelledby="tab-register" hidden>
         <label>
-          <span class="field-label">아이디 <span class="field-hint">3~50자</span></span>
-          <input name="username" type="text" autocomplete="username" minlength="3" maxlength="50" required>
+          <span class="field-label">아이디 <span class="field-hint">영문·숫자 3~50자</span></span>
+          <!-- 신재은 회원가입 규칙(UserCreate)과 같게: 영문 대소문자·숫자만 3~50자 -->
+          <input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="50" pattern="[A-Za-z0-9]+" title="영문과 숫자만, 3~50자로 입력해주세요." required>
         </label>
         <label>
           <span class="field-label">비밀번호 <span class="field-hint">4~100자</span></span>
