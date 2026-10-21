@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.core.database import Base, get_db
+from app.models.user import User
 
 # 테스트용 격리된 인메모리 SQLite DB 설정
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
