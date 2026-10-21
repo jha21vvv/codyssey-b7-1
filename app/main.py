@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from pathlib import Path
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import Base, engine
@@ -47,6 +50,17 @@ async def health_check():
         "project": settings.PROJECT_NAME,
         "database": settings.DATABASE_URL.split("///")[-1]
     }
+
+# 4. 웹 UI 화면 서빙 [권태현] (정적 파일 /static, 챗봇 화면 GET /)
+# 서버를 실행한 폴더와 상관없이 파일을 찾도록 저장소 루트 기준 경로 사용
+BASE_DIR = Path(__file__).resolve().parent.parent
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
+
+@app.get("/", include_in_schema=False)
+async def index(request: Request):
+    """챗봇 웹 화면 (API가 아니라서 Swagger 문서에는 표시하지 않음)"""
+    return templates.TemplateResponse(request, "index.html")
 
 # -------------------------------------------------------------
 # [팀원 라우터 연동 슬롯]
