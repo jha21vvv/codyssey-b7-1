@@ -729,6 +729,7 @@ body {
   min-height: 1.2em;
   margin: 0;
   font-size: 0.85rem;
+  white-space: pre-line; /* 항목별 안내가 여러 개면 한 줄씩 표시 */
 }
 
 .form-message.error {

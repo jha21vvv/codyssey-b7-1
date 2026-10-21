@@ -78,6 +78,30 @@
     return typeof detail === "string" && detail ? detail : fallback;
   }
 
+  // 회원가입 입력값 검증(422) 오류를 항목별 한국어 안내로 바꿈 (신재은 UserCreate 규칙 기준)
+  // detail 배열의 각 오류는 loc 끝에 항목 이름(username/password)이 있고, msg는 영어라 그대로 쓰지 않음
+  const REGISTER_RULE_MESSAGES = {
+    username: "아이디는 영문과 숫자만, 3~50자로 입력해주세요.",
+    password: "비밀번호는 4~100자로 입력해주세요.",
+  };
+
+  function getRegisterValidationMessage(data) {
+    const detail = data && data.detail;
+    if (typeof detail === "string" && detail) return detail;
+    const messages = [];
+    for (const error of Array.isArray(detail) ? detail : []) {
+      const field = Array.isArray(error.loc) ? error.loc[error.loc.length - 1] : "";
+      // 직접 만든 검증(field_validator)은 "Value error, " 뒤에 한국어 문구가 옴 (예: 공백만 있는 비밀번호)
+      const text = error.type === "value_error" && typeof error.msg === "string"
+        ? error.msg.replace(/^Value error, /, "")
+        : REGISTER_RULE_MESSAGES[field];
+      if (text && !messages.includes(text)) messages.push(text);
+    }
+    return messages.length
+      ? messages.join("\n")
+      : "아이디는 영문과 숫자만 3~50자, 비밀번호는 4~100자로 입력해주세요.";
+  }
+
   // 서버 쪽 문제(5xx)이거나 API가 아직 없는 경우(404·405)는 입력값 문제처럼 안내하지 않음
   const isServerProblem = (status) => status >= 500 || status === 404 || status === 405;
 
@@ -231,7 +255,7 @@
         if (isServerProblem(res.status)) {
           message = `서버 오류로 가입하지 못했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`;
         } else if (res.status === 422) {
-          message = getErrorMessage(data, "아이디는 3~50자, 비밀번호는 4~100자로 입력해주세요.");
+          message = getRegisterValidationMessage(data);
         } else {
           message = getErrorMessage(data, "회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.");
         }
