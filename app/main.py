@@ -54,9 +54,9 @@ async def health_check():
 # -------------------------------------------------------------
 from app.api.auth_router import router as auth_router  # [신재은]
 # from app.api.chat_router import router as chat_router  # [조명환]
-# from app.api.log_router import router as log_router    # [권태현]
+from app.api.log_router import router as log_router    # [권태현]
 #
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 # app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
-# app.include_router(log_router, prefix="/api/logs", tags=["Logs"])
+app.include_router(log_router, prefix="/api/logs", tags=["Logs"])
 # -------------------------------------------------------------
