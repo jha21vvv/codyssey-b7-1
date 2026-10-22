@@ -15,8 +15,10 @@ from app.models.chat_log import ChatLog
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.ai_service import (
+    DEFAULT_GEMINI_MODEL,
     FALLBACK_ERROR_MESSAGE,
     FALLBACK_TIMEOUT_MESSAGE,
+    GEMINI_API_URL,
     SYSTEM_PROMPT,
     build_chat_context,
     call_ai_api,
@@ -150,6 +152,34 @@ def test_call_ai_api_success(monkeypatch):
 
     assert status == "SUCCESS"
     assert reply == "안녕하세요! 무엇을 도와드릴까요?"
+
+
+def test_call_ai_api_gemini_key_auto_routing(monkeypatch):
+    """Gemini API 키(AIza...) 설정 시 자동으로 Gemini 호환 엔드포인트 및 기본 모델로 호출되는지 검증"""
+    monkeypatch.setattr(settings, "AI_API_KEY", "AIzaSy-test-gemini-key")
+    monkeypatch.setattr(settings, "AI_MODEL_NAME", "gpt-4o-mini")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "Gemini 응답입니다."}}]
+    }
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mock_client_ctx = MagicMock()
+    mock_client_ctx.__aenter__.return_value = mock_client_instance
+    mock_client_ctx.__aexit__.return_value = None
+
+    with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+
+    assert status == "SUCCESS"
+    assert reply == "Gemini 응답입니다."
+    called_url = mock_client_instance.post.call_args.args[0]
+    called_payload = mock_client_instance.post.call_args.kwargs["json"]
+    assert called_url == GEMINI_API_URL
+    assert called_payload["model"] == DEFAULT_GEMINI_MODEL
 
 
 def test_call_ai_api_timeout_fallback(monkeypatch):

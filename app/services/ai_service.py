@@ -13,14 +13,37 @@ from app.core.logger import logger
 MAX_PROMPT_LENGTH = 1000
 SYSTEM_PROMPT = "당신은 Codyssey B7-1 친절하고 유능한 AI 어시스턴트입니다."
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest"
 
 FALLBACK_ERROR_MESSAGE = "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요."
 FALLBACK_TIMEOUT_MESSAGE = "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요."
 
 
+def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
+    """
+    AI_API_KEY 또는 AI_MODEL_NAME 설정에 따라 OpenAI / Google Gemini(OpenAI 호환) 엔드포인트와 모델명을 자동 결정합니다.
+    - Gemini API 키(AIza... 또는 AQ....로 시작) 또는 gemini 모델명이 설정된 경우 Gemini 호환 엔드포인트 사용
+    - 그 외의 경우 기본 OpenAI 엔드포인트 사용
+    """
+    api_key = (settings.AI_API_KEY or "").strip()
+    configured_model = (settings.AI_MODEL_NAME or "gpt-4o-mini").strip()
+
+    is_gemini = api_key.startswith(("AIza", "AQ.")) or configured_model.lower().startswith("gemini")
+    if is_gemini:
+        model_name = (
+            DEFAULT_GEMINI_MODEL
+            if configured_model.lower().startswith("gpt-")
+            else configured_model
+        )
+        return GEMINI_API_URL, model_name
+
+    return OPENAI_API_URL, configured_model
+
+
 def validate_prompt(prompt: str) -> str:
     """
-    [과제 요구사항 72~73] 사용자 입력 검증
+    [과제 요구사항 72-73] 사용자 입력 검증
     빈 입력, 공백만 있는 문자열 차단, 최대 1000자 초과 차단
     """
     if prompt is None:
@@ -35,7 +58,7 @@ def validate_prompt(prompt: str) -> str:
 
 def build_chat_context(recent_logs: List[Any], current_prompt: str) -> List[Dict[str, str]]:
     """
-    [과제 요구사항 60~61] 최소한의 컨텍스트 구성 전략 (최근 N개의 대화 주입)
+    [과제 요구사항 60-61] 최소한의 컨텍스트 구성 전략 (최근 N개의 대화 주입)
     recent_logs: 권태현의 ChatLog 객체 리스트 (최신순에서 역정렬하여 오래된 순으로 주입)
     """
     messages: List[Dict[str, str]] = [
@@ -55,8 +78,9 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
     [과제 요구사항 58, 70, 101] AI API 호출 및 타임아웃 방어
     Returns: (응답텍스트, 상태코드 문자열 "SUCCESS" | "FAILED")
     """
+    api_url, model_name = resolve_ai_endpoint_and_model()
     logger.info(
-        f"[AI 호출] [AI 호출 시작] 모델={settings.AI_MODEL_NAME}, "
+        f"[AI 호출] [AI 호출 시작] 모델={model_name}, "
         f"메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
     )
 
@@ -65,18 +89,18 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
         return FALLBACK_ERROR_MESSAGE, "FAILED"
 
     headers = {
-        "Authorization": f"Bearer {settings.AI_API_KEY}",
+        "Authorization": f"Bearer {settings.AI_API_KEY.strip()}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": settings.AI_MODEL_NAME,
+        "model": model_name,
         "messages": messages,
         "temperature": 0.7,
     }
 
     try:
         async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
-            res = await client.post(OPENAI_API_URL, headers=headers, json=payload)
+            res = await client.post(api_url, headers=headers, json=payload)
             if res.status_code == 200:
                 data = res.json()
                 reply = data["choices"][0]["message"]["content"]
@@ -90,7 +114,3 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
     except Exception as e:
         logger.error(f"[AI 응답 실패] [AI 통신 예외 발생] {str(e)}")
         return f"서비스 처리 중 일시적인 오류가 발생했습니다: {str(e)}", "FAILED"
-
-
-
-
