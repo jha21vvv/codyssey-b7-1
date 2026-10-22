@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Codyssey B7-1 AI Chatbot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!--
+    [권태현 전담] 웹 챗봇 단일 페이지 인터페이스
+    질문 입력과 AI 응답을 같은 화면의 말풍선으로 보여줍니다.
+  -->
+  <header class="app-header">
+    <button type="button" id="sidebar-toggle" class="icon-btn sidebar-toggle" aria-label="지난 대화 보기" aria-controls="history-sidebar" aria-expanded="false">☰</button>
+    <h1 class="app-title">
+      <span class="app-title-text">Codyssey B7-1</span>
+      <span class="app-badge">AI 챗봇</span>
+    </h1>
+    <div id="auth-info" class="auth-info"></div>
+  </header>
+
+  <div id="error-banner" class="error-banner" role="alert" hidden>
+    <span id="error-banner-text" class="error-banner-text"></span>
+    <button type="button" id="error-banner-close" class="icon-btn" aria-label="안내 닫기">✕</button>
+  </div>
+
+  <div class="app-body">
+    <aside id="history-sidebar" class="history-sidebar" aria-label="지난 대화">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">지난 대화</h2>
+        <span id="history-count" class="history-count" hidden></span>
+      </div>
+      <p id="history-status" class="history-status">로그인하면 지난 대화가 여기에 표시됩니다.</p>
+      <ul id="history-list" class="history-list"></ul>
+    </aside>
+    <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+
+    <main class="chat-panel">
+      <section id="chat-messages" class="chat-messages" role="log" aria-live="polite" aria-label="대화 내용">
+        <!-- 대화가 없을 때만 보이는 안내 (말풍선이 생기면 CSS가 숨김) -->
+        <div class="welcome empty-state">
+          <span class="empty-icon" aria-hidden="true"></span>
+          <p class="empty-title">무엇이든 물어보세요</p>
+          <p class="empty-desc">궁금한 점을 입력하면 AI가 답변해 드려요.</p>
+          <div class="suggestions" role="group" aria-label="추천 질문">
+            <button type="button" class="suggestion-chip">FastAPI가 뭔지 쉽게 설명해줘</button>
+            <button type="button" class="suggestion-chip">파이썬 리스트와 튜플의 차이는?</button>
+            <button type="button" class="suggestion-chip">리눅스 기본 명령어 알려줘</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 비로그인 상태가 기본: 로그인이 확인되면 app.js가 안내를 숨기고 입력창을 풀어줌 -->
+      <div id="login-notice" class="login-notice">
+        <span>🔒 챗봇은 로그인한 사용자만 이용할 수 있어요.</span>
+        <span class="login-notice-actions">
+          <button type="button" class="btn btn-secondary" data-open-modal="login">로그인</button>
+          <button type="button" class="btn btn-primary" data-open-modal="register">회원가입</button>
+        </span>
+      </div>
+
+      <form id="chat-form" class="chat-form" autocomplete="off">
+        <div class="composer">
+          <label for="chat-input" class="visually-hidden">질문 입력</label>
+          <textarea id="chat-input" name="prompt" rows="1" placeholder="🔒 로그인이 필요합니다" disabled></textarea>
+          <span id="char-count" class="char-count">0 / 1,000</span>
+          <button type="submit" id="send-btn" class="send-btn" aria-label="전송" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M6 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L7.5 3.64A1 1 0 0 0 6 4.5z"/></svg>
+          </button>
+        </div>
+        <div class="chat-form-footer">
+          <p id="input-hint" class="input-hint" role="alert" hidden></p>
+          <span class="keyboard-hint">↵ Enter 전송 · Shift+Enter 줄바꿈</span>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <dialog id="auth-modal" class="modal" aria-labelledby="auth-modal-title">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="auth-modal-title" class="modal-title">Codyssey 챗봇 계정</h2>
+        <button type="button" class="icon-btn" data-close-modal aria-label="닫기">✕</button>
+      </div>
+
+      <div class="modal-tabs" role="tablist" aria-label="로그인 또는 회원가입">
+        <button type="button" id="tab-login" class="modal-tab" role="tab" data-auth-mode="login" aria-controls="login-form" aria-selected="true">로그인</button>
+        <button type="button" id="tab-register" class="modal-tab" role="tab" data-auth-mode="register" aria-controls="register-form" aria-selected="false">회원가입</button>
+      </div>
+
+      <form id="login-form" class="auth-form" role="tabpanel" aria-labelledby="tab-login">
+        <label>
+          <span class="field-label">아이디</span>
+          <input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        </label>
+        <label>
+          <span class="field-label">비밀번호</span>
+          <input name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <p id="login-message" class="form-message" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary">로그인</button>
+      </form>
+
+      <form id="register-form" class="auth-form" role="tabpanel" aria-labelledby="tab-register" hidden>
+        <label>
+          <span class="field-label">아이디 <span class="field-hint">영문·숫자 3~50자</span></span>
+          <!-- 신재은 회원가입 규칙(UserCreate)과 같게: 영문 대소문자·숫자만 3~50자 -->
+          <input name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="50" pattern="[A-Za-z0-9]+" title="영문과 숫자만, 3~50자로 입력해주세요." required>
+        </label>
+        <label>
+          <span class="field-label">비밀번호 <span class="field-hint">4~100자</span></span>
+          <input name="password" type="password" autocomplete="new-password" minlength="4" maxlength="100" required>
+        </label>
+        <label>
+          <span class="field-label">비밀번호 확인</span>
+          <input name="passwordConfirm" type="password" autocomplete="new-password" minlength="4" maxlength="100" required>
+        </label>
+        <p id="register-message" class="form-message" aria-live="polite"></p>
+        <button type="submit" class="btn btn-primary">회원가입</button>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

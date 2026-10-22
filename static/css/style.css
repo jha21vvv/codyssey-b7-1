@@ -1,0 +1,985 @@
+/*
+ * [권태현 전담] 웹 챗봇 반응형 스타일시트
+ * 코디세이 학습 화면(학습용 챗봇 패널)의 라이트 테마를 참고했습니다.
+ * 색상·간격은 :root 변수로 관리합니다.
+ */
+
+:root {
+  /* 코디세이 화면에서 뽑은 색 (흰 글자를 올리는 색은 명도 대비 4.5:1 이상이 되도록 일부 조정) */
+  --color-brand: #00409a;          /* 대표 파랑: 메인 화면 시작 버튼 */
+  --color-brand-hover: #003583;
+  --color-brand-bright: #0367ee;   /* 밝은 파랑: 레벨 배지 #0470fc를 대비 기준에 맞게 조정 */
+  --color-slate: #2c3e50;          /* 챗봇 패널의 전송·생성 버튼 */
+  --color-slate-hover: #223140;
+  --color-header: #2f4255;         /* 챗봇 패널 머리줄 */
+
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f6f8;
+  --color-bubble-ai: #f1f3f6;
+  --color-border: #e5e5e5;
+  --color-border-strong: #d3d8de;
+  --color-text: #333333;
+  --color-text-sub: #555555;
+  --color-text-muted: #6b7280;     /* 참고 화면의 #999는 흰 바탕 대비가 부족해 진하게 조정 */
+  --color-on-dark: #ffffff;
+  --color-danger: #c41e43;
+  --color-danger-strong: #d42a4e;  /* 경험치 배지 분홍빨강 #ec3e5f를 대비 기준에 맞게 조정 */
+  --color-danger-bg: #fdeef1;
+  --color-danger-border: #f6c7d1;
+  --color-success: #1b7f3b;
+
+  --radius-bubble: 14px;
+  --radius-control: 8px;
+  --radius-box: 12px;
+  --radius-pill: 999px;
+  --shadow-md: 0 12px 32px rgba(16, 24, 40, 0.18);
+  --focus-ring: 0 0 0 3px rgba(3, 103, 238, 0.15);
+  --header-height: 56px;
+  --content-width: 820px;
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* display를 지정한 요소도 hidden 속성이 있으면 확실히 숨김 */
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+  /* 한국어 단어가 음절 중간에서 줄바꿈되지 않게 함 (끊을 곳이 없는 긴 문자열은 .message의 overflow-wrap이 처리) */
+  word-break: keep-all;
+}
+
+/* ---------- 버튼 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-brand-bright);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 대표 버튼: 메인 화면 시작 버튼처럼 진한 파랑 알약 모양 */
+.btn-primary {
+  border-radius: var(--radius-pill);
+  background: var(--color-brand);
+  color: var(--color-on-dark);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+}
+
+.btn-secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-slate);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+}
+
+/* 어두운 머리줄 위 버튼 */
+.btn-light {
+  border-radius: var(--radius-pill);
+  background: #e9edf1;
+  color: var(--color-slate);
+}
+
+.btn-light:hover:not(:disabled) {
+  background: #ffffff;
+}
+
+.btn-bright {
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-bright);
+  color: var(--color-on-dark);
+}
+
+.btn-bright:hover:not(:disabled) {
+  background: #0259d1;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--color-surface-muted);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--color-brand-bright);
+  outline-offset: 2px;
+}
+
+/* ---------- 머리줄 (챗봇 패널 머리줄처럼 짙은 남회색) ---------- */
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--header-height);
+  padding: 0 20px;
+  background: var(--color-header);
+  color: var(--color-on-dark);
+  flex-shrink: 0;
+}
+
+.app-header .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-header :focus-visible {
+  outline-color: #ffffff;
+}
+
+.app-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.app-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 레벨 배지처럼 밝은 파랑 알약 */
+.app-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-bright);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.auth-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.auth-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.auth-user-name {
+  max-width: 200px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 기본 프로필 원 (머리·몸 모양을 배경 그라디언트로 그림) */
+.avatar {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 38%, #9aa5b4 0 21%, transparent 22%),
+    radial-gradient(ellipse 58% 40% at 50% 100%, #9aa5b4 0 98%, transparent 100%),
+    #e3e7ec;
+}
+
+/* ---------- 상단 에러 안내 배너 ---------- */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 20px;
+  background: var(--color-danger-bg);
+  border-bottom: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.error-banner-text {
+  flex: 1;
+}
+
+.error-banner .icon-btn {
+  width: 30px;
+  height: 30px;
+  font-size: 0.85rem;
+}
+
+.error-banner .icon-btn:hover {
+  background: rgba(196, 30, 67, 0.1);
+}
+
+/* ---------- 본문 / 대화 영역 ---------- */
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.chat-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-surface);
+}
+
+.chat-messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  /* 넓은 화면에서는 대화 폭을 --content-width로 제한하고 가운데 정렬 */
+  padding: 24px max(16px, calc((100% - var(--content-width)) / 2));
+}
+
+/* ---------- 빈 대화 안내 (챗봇 패널의 '무엇이든 물어보세요' 화면) ---------- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: auto; /* 대화가 없을 때 대화 영역 한가운데에 표시 */
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* 말풍선(대기 중 말풍선 포함)이 하나라도 생기면 안내를 숨김 */
+.chat-messages:has(.message) .empty-state {
+  display: none;
+}
+
+/* 연보라 말풍선 아이콘 */
+.empty-icon {
+  position: relative;
+  width: 44px;
+  height: 34px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f1ebfa, #cbbcf0);
+}
+
+.empty-icon::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 7px;
+  width: 12px;
+  height: 12px;
+  background: #d3c6f2;
+  clip-path: polygon(0 100%, 20% 0, 100% 35%);
+}
+
+.empty-title {
+  margin: 0;
+  color: var(--color-text-sub);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.empty-desc {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* 테두리만 있는 알약 모양 추천 질문 */
+.suggestion-chip {
+  padding: 7px 14px;
+  border: 1px solid #e8e8e8;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-text-sub);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.suggestion-chip:hover {
+  border-color: var(--color-brand-bright);
+  color: var(--color-brand);
+}
+
+.suggestion-chip:focus-visible {
+  outline: 2px solid var(--color-brand-bright);
+  outline-offset: 2px;
+}
+
+/* ---------- 말풍선 ---------- */
+.message {
+  max-width: min(720px, 85%);
+  padding: 10px 14px;
+  border-radius: var(--radius-bubble);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  /* AI 응답의 줄바꿈을 그대로 보여주고, 긴 단어·URL도 말풍선 안에서 줄바꿈 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: var(--color-brand);
+  color: var(--color-on-dark);
+  border-bottom-right-radius: 4px;
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: var(--color-bubble-ai);
+  color: var(--color-text);
+  border-bottom-left-radius: 4px;
+}
+
+.message.failed {
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+/* AI 응답 대기 중: 점 3개가 차례로 튀는 애니메이션 */
+.message.loading {
+  color: var(--color-text-muted);
+}
+
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 1.5em;
+}
+
+.typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: typing-bounce 1.2s infinite ease-in-out;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+
+  40% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typing span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+/* ---------- 입력 영역 (챗봇 패널처럼 테두리 상자 안에 입력창·글자 수·전송 버튼) ---------- */
+.chat-form {
+  padding: 8px max(16px, calc((100% - var(--content-width)) / 2)) 14px;
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto 1fr;
+  gap: 4px 12px;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-box);
+  background: var(--color-surface);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.composer:focus-within {
+  border-color: var(--color-brand-bright);
+  box-shadow: var(--focus-ring);
+}
+
+.composer:has(textarea:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.composer textarea {
+  grid-row: 1 / span 2;
+  grid-column: 1;
+  min-height: 48px;
+  max-height: 160px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  resize: none;
+}
+
+.composer textarea:focus {
+  outline: none;
+}
+
+.composer textarea:disabled {
+  cursor: not-allowed;
+}
+
+.char-count {
+  grid-row: 1;
+  grid-column: 2;
+  justify-self: end;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.char-count.over {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* 챗봇 패널의 정사각형 전송 버튼 */
+.send-btn {
+  display: inline-flex;
+  grid-row: 2;
+  grid-column: 2;
+  align-items: center;
+  align-self: end;
+  justify-content: center;
+  justify-self: end;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: var(--color-slate);
+  color: var(--color-on-dark);
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.send-btn svg {
+  width: 14px;
+  height: 14px;
+  margin-left: 2px; /* 삼각형 아이콘을 눈으로 보기에 가운데로 */
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--color-slate-hover);
+}
+
+.send-btn:focus-visible {
+  outline: 2px solid var(--color-brand-bright);
+  outline-offset: 2px;
+}
+
+.send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chat-form-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 1.2em;
+  padding: 6px 2px 0;
+}
+
+.input-hint {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.8rem;
+}
+
+.keyboard-hint {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+/* ---------- 비로그인 안내 ---------- */
+.login-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  margin: 0 max(16px, calc((100% - var(--content-width)) / 2));
+  padding: 10px 16px;
+  border-radius: var(--radius-box);
+  background: var(--color-surface-muted);
+  color: var(--color-text-sub);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.login-notice-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.login-notice .btn {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+}
+
+.login-notice .btn-secondary {
+  border-radius: var(--radius-pill);
+}
+
+/* ---------- 로그인 / 회원가입 모달 ---------- */
+.modal {
+  width: min(400px, calc(100% - 32px));
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.modal::backdrop {
+  background: rgba(2, 17, 36, 0.55);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 10px 20px;
+  background: var(--color-header);
+  color: var(--color-on-dark);
+}
+
+.modal-header .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.modal-header .icon-btn:focus-visible {
+  outline-color: #ffffff;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* 챗봇 패널의 '대화' 탭처럼 글자 아래 밑줄 */
+.modal-tabs {
+  display: flex;
+  gap: 20px;
+  margin: 0 22px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-tab {
+  padding: 14px 2px 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-tab[aria-selected="true"] {
+  color: var(--color-text);
+  border-bottom-color: var(--color-slate);
+}
+
+.modal-tab:focus-visible {
+  outline: 2px solid var(--color-brand-bright);
+  outline-offset: 2px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+  padding: 20px 22px 24px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.field-hint {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.auth-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 400;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--color-brand-bright);
+  box-shadow: var(--focus-ring);
+}
+
+.auth-form .btn {
+  padding: 12px 14px;
+  font-size: 0.95rem;
+}
+
+.form-message {
+  min-height: 1.2em;
+  margin: 0;
+  font-size: 0.85rem;
+  white-space: pre-line; /* 항목별 안내가 여러 개면 한 줄씩 표시 */
+}
+
+.form-message.error {
+  color: var(--color-danger);
+}
+
+.form-message.success {
+  color: var(--color-success);
+}
+
+/* ---------- 지난 대화 사이드바 (챗봇 패널의 대화 이력 목록) ---------- */
+.sidebar-toggle {
+  display: none;
+}
+
+.history-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 280px;
+  flex-shrink: 0;
+  padding: 18px 14px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 4px 2px;
+}
+
+.sidebar-title {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.history-count {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.history-status {
+  margin: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 테두리 있는 카드 모양 항목: 제목 한 줄 + 날짜 */
+.history-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ececec;
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.history-item:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-muted);
+}
+
+.history-item:focus-visible {
+  outline: 2px solid var(--color-brand-bright);
+  outline-offset: 1px;
+}
+
+.history-item-title {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.history-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+/* 경험치 배지처럼 분홍빨강 알약 */
+.badge-failed {
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger-strong);
+  color: var(--color-on-dark);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.history-divider {
+  align-self: center;
+  padding: 2px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+/* 사이드바에서 고른 질문을 대화창에서 잠깐 강조 */
+.message.highlight {
+  animation: highlight-pulse 1.6s ease-out;
+}
+
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 4px rgba(3, 103, 238, 0.45);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(3, 103, 238, 0);
+  }
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .sidebar-toggle {
+    display: inline-flex;
+  }
+
+  /* 모바일에서는 왼쪽에서 밀려 나오는 서랍으로 바뀜 (닫혀 있을 때는 Tab 이동에서도 제외) */
+  .history-sidebar {
+    position: fixed;
+    top: var(--header-height);
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    width: min(300px, 85vw);
+    box-shadow: var(--shadow-md);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
+  }
+
+  body.sidebar-open .history-sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: var(--header-height) 0 0 0;
+    z-index: 10;
+    background: rgba(2, 17, 36, 0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message.highlight {
+    animation: none;
+    outline: 3px solid var(--color-brand-bright);
+  }
+
+  .history-sidebar {
+    transition: none;
+  }
+}
+
+/* 화면에는 숨기고 스크린리더에는 읽히게 하는 유틸리티 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- 모바일 ---------- */
+@media (max-width: 640px) {
+  .app-header {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .app-title {
+    font-size: 0.95rem;
+  }
+
+  .auth-info {
+    gap: 6px;
+  }
+
+  .auth-info .btn {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+
+  .auth-user-name {
+    max-width: 96px;
+  }
+
+  .chat-messages {
+    padding: 16px 12px;
+  }
+
+  .message {
+    max-width: 92%;
+  }
+
+  .chat-form {
+    padding: 8px 12px 12px;
+  }
+
+  .login-notice {
+    margin: 0 12px;
+  }
+}
+
+@media (max-width: 400px) {
+  /* 아주 좁은 화면에서는 제목 옆 배지를 숨겨 로그인 버튼 자리를 확보 */
+  .app-badge {
+    display: none;
+  }
+}
+
+/* 터치 화면·좁은 화면에서는 물리 키보드 단축키 안내를 숨김 */
+@media (max-width: 640px), (pointer: coarse) {
+  .keyboard-hint {
+    display: none;
+  }
+}
