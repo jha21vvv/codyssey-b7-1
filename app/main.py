@@ -52,11 +52,11 @@ async def health_check():
 # [팀원 라우터 연동 슬롯]
 # Phase 2 ~ 3에서 팀원들이 작성한 라우터를 아래에 include 합니다.
 # -------------------------------------------------------------
-# from app.api.auth_router import router as auth_router  # [신재은]
+from app.api.auth_router import router as auth_router  # [신재은]
 # from app.api.chat_router import router as chat_router  # [조명환]
-# from app.api.log_router import router as log_router    # [권태현]
+from app.api.log_router import router as log_router    # [권태현]
 #
-# app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
+app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 # app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
-# app.include_router(log_router, prefix="/api/logs", tags=["Logs"])
+app.include_router(log_router, prefix="/api/logs", tags=["Logs"])
 # -------------------------------------------------------------
