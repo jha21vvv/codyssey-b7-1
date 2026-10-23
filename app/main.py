@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import Base, engine
 from app.core.logger import logger, LoggingMiddleware
+from app.models.user import User  # noqa: F401
+from app.models.chat_log import ChatLog  # noqa: F401
 
 """
 [안재현 전담] FastAPI 메인 애플리케이션 엔트리포인트
