@@ -22,13 +22,22 @@ FALLBACK_TIMEOUT_MESSAGE = "AI 응답 시간이 초과되었습니다. 잠시 �
 
 def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
     """
-    AI_API_KEY 또는 AI_MODEL_NAME 설정에 따라 OpenAI / Google Gemini(OpenAI 호환) 엔드포인트와 모델명을 자동 결정합니다.
-    - Gemini API 키(AIza... 또는 AQ....로 시작) 또는 gemini 모델명이 설정된 경우 Gemini 호환 엔드포인트 사용
-    - 그 외의 경우 기본 OpenAI 엔드포인트 사용
+    AI_BASE_URL, AI_API_KEY 또는 AI_MODEL_NAME 설정에 따라 API 엔드포인트와 모델명을 결정합니다.
+    - AI_BASE_URL이 설정된 경우: 해당 커스텀/프록시 엔드포인트(코디세이 콘솔 등) 사용
+    - Gemini API 키(AIza... 또는 AQ....로 시작) 또는 gemini 모델명이 설정된 경우: Gemini 호환 엔드포인트 사용
+    - 그 외의 경우: 기본 OpenAI 공식 엔드포인트 사용
     """
     api_key = (settings.AI_API_KEY or "").strip()
     configured_model = (settings.AI_MODEL_NAME or "gpt-4o-mini").strip()
 
+    # 1. 커스텀 Base URL 지정 시 (코디세이 AI 프록시 등)
+    if settings.AI_BASE_URL and settings.AI_BASE_URL.strip():
+        base_url = settings.AI_BASE_URL.strip().rstrip("/")
+        if not base_url.endswith("/chat/completions"):
+            base_url = f"{base_url}/chat/completions"
+        return base_url, configured_model
+
+    # 2. Gemini API 키 또는 모델 지정 시
     is_gemini = api_key.startswith(("AIza", "AQ.")) or configured_model.lower().startswith("gemini")
     if is_gemini:
         model_name = (
@@ -38,6 +47,7 @@ def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
         )
         return GEMINI_API_URL, model_name
 
+    # 3. 기본 OpenAI 공식 엔드포인트
     return OPENAI_API_URL, configured_model
 
 

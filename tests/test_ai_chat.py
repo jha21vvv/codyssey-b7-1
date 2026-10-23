@@ -182,6 +182,33 @@ def test_call_ai_api_gemini_key_auto_routing(monkeypatch):
     assert called_payload["model"] == DEFAULT_GEMINI_MODEL
 
 
+def test_call_ai_api_custom_base_url(monkeypatch):
+    """AI_BASE_URL(코디세이 프록시 등) 설정 시 해당 엔드포인트로 정확히 호출되는지 검증"""
+    monkeypatch.setattr(settings, "AI_API_KEY", "sk-cody-test-key")
+    monkeypatch.setattr(settings, "AI_BASE_URL", "https://proxy.codyssey.kr/v1")
+    monkeypatch.setattr(settings, "AI_MODEL_NAME", "gpt-4o-mini")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "코디세이 AI 응답입니다."}}]
+    }
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mock_client_ctx = MagicMock()
+    mock_client_ctx.__aenter__.return_value = mock_client_instance
+    mock_client_ctx.__aexit__.return_value = None
+
+    with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+
+    assert status == "SUCCESS"
+    assert reply == "코디세이 AI 응답입니다."
+    called_url = mock_client_instance.post.call_args.args[0]
+    assert called_url == "https://proxy.codyssey.kr/v1/chat/completions"
+
+
 def test_call_ai_api_timeout_fallback(monkeypatch):
     """AI API 타임아웃(httpx.TimeoutException) 발생 시 서버 비정상 종료 없이 FAILED 및 안내 문구 반환 검증"""
     monkeypatch.setattr(settings, "AI_API_KEY", "sk-test-valid-key")
