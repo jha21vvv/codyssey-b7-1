@@ -48,7 +48,7 @@ flowchart TB
         CFTunnel["Cloudflare Tunnel<br>(cloudflared / trycloudflare.com)"]
     end
 
-    subgraph Backend ["FastAPI Application (Port: 8000)"]
+    subgraph Backend ["FastAPI Application (Port: 8080)"]
         MW["LoggingMiddleware<br>(Request-ID & Client IP)"]
         CORS["CORSMiddleware"]
         Health["/health (HealthCheck)"]
@@ -321,9 +321,9 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # 5. 로컬 개발 서버 실행
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 ```
-서버 실행 후 브라우저에서 `http://localhost:8000`에 접속하면 챗봇 웹 UI를 이용할 수 있습니다.
+서버 실행 후 브라우저에서 `http://localhost:8080`에 접속하면 챗봇 웹 UI를 이용할 수 있습니다.
 
 ---
 
@@ -412,11 +412,11 @@ sqlite3 chat_service.db < scripts/verify_db.sql
 
 ```bash
 # 1. 로그인 후 발급받은 토큰으로 내 로그 조회
-curl -X GET "http://localhost:8000/api/logs/me?limit=10" \
+curl -X GET "http://localhost:8080/api/logs/me?limit=10" \
      -H "Authorization: Bearer <YOUR_ACCESS_TOKEN>"
 
 # 2. 관리자 키로 전체 사용자 로그 조회
-curl -X GET "http://localhost:8000/api/logs/admin?limit=10" \
+curl -X GET "http://localhost:8080/api/logs/admin?limit=10" \
      -H "X-Admin-Key: <ADMIN_API_KEY>"
 ```
 
@@ -487,7 +487,7 @@ pytest -v
 
      # Mac / Linux:
      source .venv/bin/activate
-     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+     uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
      ```
 2. 브라우저 또는 터미널에서 상태 확인 엔드포인트를 호출합니다:
    ```bash
@@ -501,13 +501,13 @@ pytest -v
 ---
 
 ### Step 2. 웹 UI 접속 및 비로그인 접근 차단 검증 (과제 요구사항 1, 2)
-1. 웹 브라우저에서 `http://localhost:8000` (또는 외부 배포 URL)에 접속합니다.
+1. 웹 브라우저에서 `http://localhost:8080` (또는 외부 배포 URL)에 접속합니다.
 2. 메인 대화 패널 하단의 입력창을 확인합니다.
 3. **검증 포인트 (2중 방어)**:
    - **프론트 방어**: 입력창이 비활성화(`disabled`)되어 있으며 placeholder로 `🔒 로그인이 필요합니다`가 표시되는지 확인
    - **백엔드 API 방어**: 브라우저 콘솔 또는 cURL로 토큰 없이 질문을 전송했을 때 즉시 `401 Unauthorized`가 반환되는지 확인:
      ```bash
-     curl -i -X POST http://localhost:8000/api/chat -H "Content-Type: application/json" -d "{\"prompt\":\"안녕\"}"
+     curl -i -X POST http://localhost:8080/api/chat -H "Content-Type: application/json" -d "{\"prompt\":\"안녕\"}"
      # -> HTTP/1.1 401 Unauthorized 반환
      ```
 
