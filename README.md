@@ -560,11 +560,15 @@ pytest -v
 외부 AI 서비스의 일시적 장애나 네트워크 타임아웃(10초) 발생 시, 백엔드 프로세스가 `500 Error`로 죽지 않고 사용자에게 정중한 Fallback 안내를 반환하는지 아래 방법으로 확인합니다:
 
 * **방법 A (가장 추천 - 자동화 단위 테스트로 1초 만에 확인)**:
-  VS Code 새 터미널에서 타임아웃 및 장애 모의 테스트를 실행합니다:
-  ```bash
+  새 터미널에서 타임아웃 및 장애 모의 테스트를 실행합니다:
+  ```powershell
+  # Windows:
+  .\.venv\Scripts\pytest tests/test_ai_chat.py -k fallback
+
+  # Mac / Linux:
   pytest tests/test_ai_chat.py -k fallback
   ```
-  * **결과**: 타임아웃(`TimeoutException`) 및 API 장애 시 서버 무중단 처리 테스트 2건 전원 통과 (`2 passed`) 확인
+  * **결과**: 타임아웃(`TimeoutException`) 및 API 장애 시 서버 무중단 처리 테스트 3건 전원 통과 (`3 passed`) 확인
 * **방법 B (실제 브라우저 화면에서 눈으로 직접 확인)**:
   1. `.env` 파일의 타임아웃 설정을 0.001초로 일시 수정: `AI_TIMEOUT_SECONDS=0.001`
   2. 브라우저 챗봇 화면에서 아무 질문이나 입력 후 전송
@@ -606,8 +610,12 @@ pytest -v
 ---
 
 ### Step 9. 전체 자동화 단위 테스트 실행 (과제 요구사항 7)
-프로젝트 전 영역의 기능 무결성을 보증하는 40개 테스트를 일괄 실행합니다:
-```bash
+프로젝트 전 영역의 기능 무결성을 보증하는 42개 테스트를 일괄 실행합니다:
+```powershell
+# Windows:
+.\.venv\Scripts\pytest -v
+
+# Mac / Linux:
 pytest -v
 ```
-* **결과**: `40 passed` 확인 (인증, 챗봇, DB 영속화, 헬스체크, 웹 화면 서빙 100% 통과)
+* **결과**: `42 passed` 확인 (인증, 챗봇, DB 영속화, 헬스체크, 웹 화면 서빙 100% 통과)
