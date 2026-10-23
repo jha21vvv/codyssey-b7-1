@@ -1,7 +1,15 @@
 import argparse
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Optional
+
+# Windows 콘솔 및 리디렉션 환경에서 UTF-8 한글 출력 보장
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 """
 [권태현 전담] 평가자 확인용 SQLite 대화 로그 조회 스크립트
