@@ -33,11 +33,20 @@ def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
     # 1. 커스텀 Base URL 지정 시 (코디세이 AI 프록시 등)
     if settings.AI_BASE_URL and settings.AI_BASE_URL.strip():
         base_url = settings.AI_BASE_URL.strip().rstrip("/")
+        if base_url.endswith("/messages"):
+            model_name = configured_model if configured_model.lower().startswith("claude") else "claude-haiku-4"
+            return base_url, model_name
         if not base_url.endswith("/chat/completions"):
             base_url = f"{base_url}/chat/completions"
         return base_url, configured_model
 
-    # 2. Gemini API 키 또는 모델 지정 시
+    # 2. 코디세이 전용 API 키(sk-cody-...) 감지 시 자동 분기
+    if api_key.startswith("sk-cody-"):
+        if configured_model.lower().startswith("claude"):
+            return "https://copa.codyssey.kr/v1/messages", configured_model
+        return "https://copa.codyssey.kr/v1/chat/completions", "gpt-5-mini"
+
+    # 3. Gemini API 키 또는 모델 지정 시
     is_gemini = api_key.startswith(("AIza", "AQ.")) or configured_model.lower().startswith("gemini")
     if is_gemini:
         model_name = (
@@ -47,7 +56,7 @@ def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
         )
         return GEMINI_API_URL, model_name
 
-    # 3. 기본 OpenAI 공식 엔드포인트
+    # 4. 기본 OpenAI 공식 엔드포인트
     return OPENAI_API_URL, configured_model
 
 
@@ -83,39 +92,87 @@ def build_chat_context(recent_logs: List[Any], current_prompt: str) -> List[Dict
     return messages
 
 
+async def _call_anthropic_api(
+    client: httpx.AsyncClient,
+    api_url: str,
+    model_name: str,
+    messages: List[Dict[str, str]]
+) -> Tuple[str, str]:
+    """Anthropic Claude 형식 호출 헬퍼"""
+    headers = {
+        "x-api-key": settings.AI_API_KEY.strip(),
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    system_content = SYSTEM_PROMPT
+    anthropic_messages = []
+    for msg in messages:
+        if msg.get("role") == "system":
+            system_content = msg.get("content", SYSTEM_PROMPT)
+        else:
+            anthropic_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    payload = {
+        "model": model_name if model_name.lower().startswith("claude") else "claude-haiku-4",
+        "max_tokens": 1000,
+        "system": system_content,
+        "messages": anthropic_messages,
+    }
+
+    res = await client.post(api_url, headers=headers, json=payload)
+    if res.status_code == 200:
+        data = res.json()
+        reply = data["content"][0]["text"]
+        logger.info("[AI 응답 수신] [Anthropic AI 응답 수신 성공] status=200")
+        return reply, "SUCCESS"
+    logger.error(f"[AI 응답 실패] [Anthropic 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
+    return FALLBACK_ERROR_MESSAGE, "FAILED"
+
+
 async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
     """
     [과제 요구사항 58, 70, 101] AI API 호출 및 타임아웃 방어
+    OpenAI, Google Gemini, Anthropic 및 코디세이 프록시를 모두 지원합니다.
     Returns: (응답텍스트, 상태코드 문자열 "SUCCESS" | "FAILED")
     """
     api_url, model_name = resolve_ai_endpoint_and_model()
     logger.info(
         f"[AI 호출] [AI 호출 시작] 모델={model_name}, "
-        f"메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
+        f"엔드포인트={api_url}, 메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
     )
 
     if not settings.AI_API_KEY or settings.AI_API_KEY.strip() in ("", "your-actual-api-key-here"):
         logger.error("[AI 응답 실패] [AI 호출 실패] 유효한 AI_API_KEY가 설정되지 않았습니다.")
         return FALLBACK_ERROR_MESSAGE, "FAILED"
 
-    headers = {
-        "Authorization": f"Bearer {settings.AI_API_KEY.strip()}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": model_name,
-        "messages": messages,
-        "temperature": 0.7,
-    }
+    is_anthropic = api_url.endswith("/messages") or model_name.lower().startswith("claude")
 
     try:
         async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
+            if is_anthropic:
+                return await _call_anthropic_api(client, api_url, model_name, messages)
+
+            headers = {
+                "Authorization": f"Bearer {settings.AI_API_KEY.strip()}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": model_name,
+                "messages": messages,
+                "temperature": 0.7,
+            }
             res = await client.post(api_url, headers=headers, json=payload)
             if res.status_code == 200:
                 data = res.json()
                 reply = data["choices"][0]["message"]["content"]
                 logger.info("[AI 응답 수신] [AI 응답 수신 성공] status=200")
                 return reply, "SUCCESS"
+
+            # 코디세이 키가 Anthropic 호환 키일 경우 자동 폴백
+            if res.status_code == 403 and "OpenAI-compatible" in res.text and "copa.codyssey.kr" in api_url:
+                logger.info("[AI 자동 전환] 발급된 키가 Anthropic 호환 키이므로 Claude 엔드포인트(/v1/messages)로 자동 전환합니다.")
+                return await _call_anthropic_api(client, "https://copa.codyssey.kr/v1/messages", "claude-haiku-4", messages)
+
             logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
             return FALLBACK_ERROR_MESSAGE, "FAILED"
     except httpx.TimeoutException:
