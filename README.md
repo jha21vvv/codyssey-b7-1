@@ -504,12 +504,22 @@ pytest -v
 1. 웹 브라우저에서 `http://localhost:8080` (또는 외부 배포 URL)에 접속합니다.
 2. 메인 대화 패널 하단의 입력창을 확인합니다.
 3. **검증 포인트 (2중 방어)**:
-   - **프론트 방어**: 입력창이 비활성화(`disabled`)되어 있으며 placeholder로 `🔒 로그인이 필요합니다`가 표시되는지 확인
-   - **백엔드 API 방어**: 브라우저 콘솔 또는 cURL로 토큰 없이 질문을 전송했을 때 즉시 `401 Unauthorized`가 반환되는지 확인:
-     ```bash
-     curl -i -X POST http://localhost:8080/api/chat -H "Content-Type: application/json" -d "{\"prompt\":\"안녕\"}"
-     # -> HTTP/1.1 401 Unauthorized 반환
-     ```
+   - **① 프론트엔드 방어 (화면)**: 입력창이 비활성화(`disabled`)되어 타이핑이 불가능하며, placeholder로 `🔒 로그인이 필요합니다`가 표시되는지 확인
+   - **② 백엔드 API 방어 (인증 차단 - 아래 방법 중 편한 1가지로 확인)**:
+     * **방법 A (가장 추천 - Swagger UI)**:
+       새 탭에서 `http://localhost:8080/docs` 접속 ➔ `POST /api/chat` 클릭 ➔ `Try it out` ➔ `Execute` 클릭 ➔ **`401 Unauthorized` ("로그인이 필요합니다.")** 즉시 반환 확인 (새 터미널 열 필요 없음!)
+     * **방법 B (브라우저 F12 개발자 콘솔)**:
+       웹 화면에서 `F12` ➔ `Console(콘솔)` 탭 클릭 후 아래 1줄 입력:
+       ```javascript
+       fetch('/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({prompt: '안녕'})}).then(r => console.log('응답 코드:', r.status))
+       // -> 콘솔에 "응답 코드: 401" 출력 확인
+       ```
+     * **방법 C (새 터미널 창을 열어서 cURL 실행)**:
+       VS Code의 `+` 버튼으로 새 터미널 창을 연 뒤 실행:
+       ```bash
+       curl -i -X POST http://localhost:8080/api/chat -H "Content-Type: application/json" -d "{\"prompt\":\"안녕\"}"
+       # -> HTTP/1.1 401 Unauthorized 반환 확인
+       ```
 
 ---
 
