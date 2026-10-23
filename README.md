@@ -8,9 +8,9 @@
 
 평가자 및 외부 네트워크 사용자를 위해 상시 접속 가능한 퍼블릭 도메인을 제공합니다.
 
-* **🌐 서비스 접속 URL**: [https://yield-quarter-owner-involvement.trycloudflare.com](https://yield-quarter-owner-involvement.trycloudflare.com)
-* **📋 Swagger API 명세서**: [https://yield-quarter-owner-involvement.trycloudflare.com/docs](https://yield-quarter-owner-involvement.trycloudflare.com/docs)
-* **🔍 상태 점검 (Health Check)**: [https://yield-quarter-owner-involvement.trycloudflare.com/health](https://yield-quarter-owner-involvement.trycloudflare.com/health)
+* **🌐 서비스 접속 URL**: [https://undertaken-resume-anywhere-overall.trycloudflare.com](https://undertaken-resume-anywhere-overall.trycloudflare.com)
+* **📋 Swagger API 명세서**: [https://undertaken-resume-anywhere-overall.trycloudflare.com/docs](https://undertaken-resume-anywhere-overall.trycloudflare.com/docs)
+* **🔍 상태 점검 (Health Check)**: [https://undertaken-resume-anywhere-overall.trycloudflare.com/health](https://undertaken-resume-anywhere-overall.trycloudflare.com/health)
 
 > **💡 배포 안내**:
 > 로컬 서버 구동 후 `scripts/run_tunnel.sh` (또는 Windows의 `scripts\run_tunnel.ps1`)를 실행하면 Cloudflare Tunnel을 통해 즉시 외부 접속이 가능하며, Render/PaaS 배포용 `Procfile`도 함께 제공됩니다.
