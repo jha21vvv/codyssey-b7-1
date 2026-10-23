@@ -61,11 +61,26 @@ if ($ServerJob.HasExited) {
 try {
     Write-Host ">> 2. Cloudflare 터널 기동 중... (외부 접속 퍼블릭 URL 발급 대기)" -ForegroundColor Green
     Write-Host "----------------------------------------------------------------------" -ForegroundColor Yellow
-    Write-Host "아래 출력되는 'https://*.trycloudflare.com' 주소로 평가자가 접속할 수 있습니다." -ForegroundColor Yellow
+    Write-Host "URL이 발급되면 자동으로 콘솔에 크게 강조 표시되고 브라우저가 열립니다." -ForegroundColor Yellow
     Write-Host "종료하려면 Ctrl + C를 누르세요." -ForegroundColor Yellow
     Write-Host "----------------------------------------------------------------------" -ForegroundColor Yellow
 
-    & $CloudflaredCmd tunnel --url "http://localhost:$Port"
+    $UrlOpened = $false
+    & $CloudflaredCmd tunnel --url "http://localhost:$Port" 2>&1 | ForEach-Object {
+        $line = $_.ToString()
+        if (-not $UrlOpened -and $line -match "(https://[a-zA-Z0-9-]+\.trycloudflare\.com)") {
+            $UrlOpened = $true
+            $FoundUrl = $matches[1]
+            Write-Host "`n"
+            Write-Host "======================================================================" -ForegroundColor Green
+            Write-Host "  🚀 [외부 접속 공인 URL 발급 완료! 아래 주소를 클릭하세요]" -ForegroundColor Green
+            Write-Host "  👉 $FoundUrl" -ForegroundColor Yellow
+            Write-Host "  💡 웹 브라우저로 위 주소를 자동으로 엽니다..." -ForegroundColor Cyan
+            Write-Host "======================================================================`n" -ForegroundColor Green
+            try { Start-Process $FoundUrl } catch {}
+        }
+        Write-Host $line
+    }
 } finally {
     Write-Host "`n>> 서버 프로세스 종료 중..." -ForegroundColor Gray
     if ($ServerJob -and -not $ServerJob.HasExited) {
