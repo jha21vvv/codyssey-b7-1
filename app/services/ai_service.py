@@ -145,7 +145,9 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
         logger.error("[AI 응답 실패] [AI 호출 실패] 유효한 AI_API_KEY가 설정되지 않았습니다.")
         return FALLBACK_ERROR_MESSAGE, "FAILED"
 
-    is_anthropic = api_url.endswith("/messages") or model_name.lower().startswith("claude")
+    is_anthropic = api_url.endswith("/messages") or (
+        model_name.lower().startswith("claude") and "api.openai.com" not in api_url
+    )
 
     try:
         async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:

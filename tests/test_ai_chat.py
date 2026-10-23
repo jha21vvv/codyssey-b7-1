@@ -134,6 +134,8 @@ def test_build_chat_context_chronological_and_filter_failed():
 def test_call_ai_api_success(monkeypatch):
     """AI API 정상 응답(200 OK) 시 답변 텍스트와 SUCCESS 반환 검증"""
     monkeypatch.setattr(settings, "AI_API_KEY", "sk-test-valid-key")
+    monkeypatch.setattr(settings, "AI_BASE_URL", "")
+    monkeypatch.setattr(settings, "AI_MODEL_NAME", "gpt-4o-mini")
 
     mock_response = MagicMock()
     mock_response.status_code = 200
