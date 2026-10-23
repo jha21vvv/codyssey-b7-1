@@ -23,3 +23,19 @@ def test_logging_middleware_header_injection():
     assert response.status_code == 200
     assert "X-Request-ID" in response.headers
     assert len(response.headers["X-Request-ID"]) > 0
+
+def test_logging_middleware_reverse_proxy_headers():
+    """역방향 프록시 헤더(X-Forwarded-For, X-Real-IP) 전송 시 정상 로깅 및 동작 검증"""
+    response = client.get("/health", headers={"X-Forwarded-For": "203.0.113.195, 10.0.0.1"})
+    assert response.status_code == 200
+    assert "X-Request-ID" in response.headers
+
+    response_real = client.get("/health", headers={"X-Real-IP": "198.51.100.42"})
+    assert response_real.status_code == 200
+    assert "X-Request-ID" in response_real.headers
+
+def test_logging_middleware_non_existent_route():
+    """존재하지 않는 경로 요청 시에도 X-Request-ID 주입 및 미들웨어 정상 동작 검증"""
+    response = client.get("/non-existent-route-404")
+    assert response.status_code == 404
+    assert "X-Request-ID" in response.headers

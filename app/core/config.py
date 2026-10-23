@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     
     # AI 챗봇 API 설정 (조명환 AI 모듈에서 사용)
     AI_API_KEY: str = ""
+    AI_BASE_URL: str = ""  # 커스텀/프록시 엔드포인트 (코디세이 콘솔 등)
     AI_MODEL_NAME: str = "gpt-4o-mini"
     AI_TIMEOUT_SECONDS: float = 10.0  # 타임아웃 기본 10초 명시
 

@@ -28,6 +28,11 @@ if not logger.handlers:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
+    # 파일 출력 핸들러 (server.log 에도 영구 기록)
+    file_handler = logging.FileHandler("server.log", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
 class LoggingMiddleware(BaseHTTPMiddleware):
     """
     모든 들어오는 HTTP 요청에 Request-ID를 부여하고,
@@ -39,7 +44,18 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         request.state.req_id = req_id
         start_time = time.time()
         
-        client_host = request.client.host if request.client else "unknown"
+        # 클라이언트 IP 추출 (역방향 프록시 및 터널 환경의 X-Forwarded-For, X-Real-IP 우선 지원)
+        forwarded_for = request.headers.get("x-forwarded-for")
+        real_ip = request.headers.get("x-real-ip")
+        if forwarded_for:
+            client_host = forwarded_for.split(",")[0].strip()
+        elif real_ip:
+            client_host = real_ip.strip()
+        elif request.client:
+            client_host = request.client.host
+        else:
+            client_host = "unknown"
+
         path = request.url.path
         method = request.method
         

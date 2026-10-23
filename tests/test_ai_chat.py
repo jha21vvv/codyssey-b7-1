@@ -134,6 +134,8 @@ def test_build_chat_context_chronological_and_filter_failed():
 def test_call_ai_api_success(monkeypatch):
     """AI API 정상 응답(200 OK) 시 답변 텍스트와 SUCCESS 반환 검증"""
     monkeypatch.setattr(settings, "AI_API_KEY", "sk-test-valid-key")
+    monkeypatch.setattr(settings, "AI_BASE_URL", "")
+    monkeypatch.setattr(settings, "AI_MODEL_NAME", "gpt-4o-mini")
 
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -180,6 +182,62 @@ def test_call_ai_api_gemini_key_auto_routing(monkeypatch):
     called_payload = mock_client_instance.post.call_args.kwargs["json"]
     assert called_url == GEMINI_API_URL
     assert called_payload["model"] == DEFAULT_GEMINI_MODEL
+
+
+def test_call_ai_api_custom_base_url(monkeypatch):
+    """AI_BASE_URL(코디세이 프록시 등) 설정 시 해당 엔드포인트로 정확히 호출되는지 검증"""
+    monkeypatch.setattr(settings, "AI_API_KEY", "sk-cody-test-key")
+    monkeypatch.setattr(settings, "AI_BASE_URL", "https://proxy.codyssey.kr/v1")
+    monkeypatch.setattr(settings, "AI_MODEL_NAME", "gpt-4o-mini")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "코디세이 AI 응답입니다."}}]
+    }
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mock_client_ctx = MagicMock()
+    mock_client_ctx.__aenter__.return_value = mock_client_instance
+    mock_client_ctx.__aexit__.return_value = None
+
+    with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+
+    assert status == "SUCCESS"
+    assert reply == "코디세이 AI 응답입니다."
+    called_url = mock_client_instance.post.call_args.args[0]
+    assert called_url == "https://proxy.codyssey.kr/v1/chat/completions"
+
+
+def test_call_ai_api_codyssey_key_auto_routing(monkeypatch):
+    """sk-cody- 키 감지 시 자동으로 https://copa.codyssey.kr/v1/chat/completions 로 분기하는지 검증"""
+    monkeypatch.setattr(settings, "AI_API_KEY", "sk-cody-live-test1234")
+    monkeypatch.setattr(settings, "AI_BASE_URL", "")
+    monkeypatch.setattr(settings, "AI_MODEL_NAME", "gpt-4o-mini")
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "choices": [{"message": {"content": "코디세이 자동 라우팅 응답"}}]
+    }
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.post.return_value = mock_response
+    mock_client_ctx = MagicMock()
+    mock_client_ctx.__aenter__.return_value = mock_client_instance
+    mock_client_ctx.__aexit__.return_value = None
+
+    with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+
+    assert status == "SUCCESS"
+    assert reply == "코디세이 자동 라우팅 응답"
+    called_url = mock_client_instance.post.call_args.args[0]
+    called_payload = mock_client_instance.post.call_args.kwargs["json"]
+    assert called_url == "https://copa.codyssey.kr/v1/chat/completions"
+    assert called_payload["model"] == "gpt-5-mini"
 
 
 def test_call_ai_api_timeout_fallback(monkeypatch):
