@@ -28,6 +28,11 @@ if not logger.handlers:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
+    # 파일 출력 핸들러 (server.log 에도 영구 기록)
+    file_handler = logging.FileHandler("server.log", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
 class LoggingMiddleware(BaseHTTPMiddleware):
     """
     모든 들어오는 HTTP 요청에 Request-ID를 부여하고,
