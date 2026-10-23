@@ -16,18 +16,18 @@ Write-Host "====================================================================
 Write-Host " [Codyssey B7-1] 웹 AI 챗봇 배포 및 Cloudflare 터널 실행기 (Windows)" -ForegroundColor Cyan
 Write-Host "======================================================================" -ForegroundColor Cyan
 
-# 1. 가상환경 점검
-$VenvPython = ".\.venv\Scripts\python.exe"
-$VenvUvicorn = ".\.venv\Scripts\uvicorn.exe"
+# 1. 프로젝트 경로 및 가상환경 점검
+$ProjectRoot = if ($PSScriptRoot) { Split-Path -Parent $PSScriptRoot } else { (Get-Location).Path }
+$VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $VenvPython)) {
     Write-Host ">> [경고] .venv 가상환경이 없습니다. 시스템 python을 사용합니다." -ForegroundColor Yellow
-    $VenvUvicorn = "uvicorn"
+    $VenvPython = "python"
 }
 
 # 2. cloudflared 바이너리 점검
 $CloudflaredCmd = "cloudflared"
-$CloudflaredLocal = ".\cloudflared.exe"
+$CloudflaredLocal = Join-Path $ProjectRoot "cloudflared.exe"
 
 if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
     if (Test-Path $CloudflaredLocal) {
@@ -46,10 +46,17 @@ if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
     }
 }
 
-Write-Host ">> 1. FastAPI 백엔드 서버 백그라운드 기동 중 (Port: $Port)..." -ForegroundColor Green
-$ServerJob = Start-Process -FilePath $VenvUvicorn -ArgumentList "app.main:app --host 0.0.0.0 --port $Port" -PassThru -NoNewWindow
+Write-Host ">> 1. FastAPI 백엔드 서버 기동 중 (Port: $Port, Root: $ProjectRoot)..." -ForegroundColor Green
+$ServerJob = Start-Process -FilePath $VenvPython -ArgumentList "-m uvicorn app.main:app --host 0.0.0.0 --port $Port" -WorkingDirectory $ProjectRoot -PassThru -NoNewWindow
 
 Start-Sleep -Seconds 2
+
+if ($ServerJob.HasExited) {
+    Write-Host ">> [오류] FastAPI 서버 기동 실패!" -ForegroundColor Red
+    exit 1
+} else {
+    Write-Host ">> [성공] FastAPI 서버 정상 실행 중 (PID: $($ServerJob.Id))" -ForegroundColor Green
+}
 
 try {
     Write-Host ">> 2. Cloudflare 터널 기동 중... (외부 접속 퍼블릭 URL 발급 대기)" -ForegroundColor Green
