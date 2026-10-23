@@ -467,14 +467,32 @@ pytest -v
 ---
 
 ### Step 1. 로컬 서버 기동 및 헬스체크 확인
-1. 가상환경 활성화 후 서버를 실행합니다:
-   ```bash
-   uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-   *(Windows 포트 충돌 시: `--port 8080` 권장)*
+1. 서버를 실행합니다:
+   * **방법 A (가장 추천 - 외부 접속 및 브라우저 원클릭 자동 오픈)**:
+     ```powershell
+     # Windows:
+     .\scripts\run_tunnel.ps1
+
+     # Mac / Linux:
+     chmod +x scripts/run_tunnel.sh && ./scripts/run_tunnel.sh
+     ```
+   * **방법 B (로컬 가상환경에서 uvicorn 직접 실행)**:
+     ```powershell
+     # Windows (가상환경 파이썬으로 직접 실행 - 가장 안전):
+     .\.venv\Scripts\python -m uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+     # 또는 가상환경 활성화 후 실행:
+     .\.venv\Scripts\Activate.ps1
+     uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+
+     # Mac / Linux:
+     source .venv/bin/activate
+     uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+     ```
 2. 브라우저 또는 터미널에서 상태 확인 엔드포인트를 호출합니다:
    ```bash
-   curl http://localhost:8000/health
+   curl http://localhost:8080/health
+   # (외부 배포 URL 사용 시: curl https://<배포도메인>/health)
    ```
 3. **검증 포인트**:
    - `{"status": "healthy", "project": "Codyssey B7-1 AI Chatbot", "database": "chat_service.db"}` 응답 (`200 OK`) 확인
