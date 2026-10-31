@@ -28,16 +28,27 @@ AI_FAILURE_RESPONSES = {
     "TIMEOUT": (504, "AI_TIMEOUT"),
     "NOT_CONFIGURED": (503, "AI_NOT_CONFIGURED"),
     "UPSTREAM_ERROR": (502, "AI_UPSTREAM_ERROR"),
+    "BAD_RESPONSE": (502, "AI_BAD_RESPONSE"),
     "CONNECTION_ERROR": (502, "AI_CONNECTION_ERROR"),
+    "UNEXPECTED_ERROR": (502, "AI_UNEXPECTED_ERROR"),
 }
 
 CHAT_ERROR_DOCS = {
     401: {"model": ErrorResponse, "description": "로그인 필요"},
     422: {"model": ErrorResponse, "description": "질문이 비었거나 1000자 초과"},
-    502: {"model": ChatFailureResponse, "description": "AI 서버 오류·연결 실패"},
+    502: {"model": ChatFailureResponse, "description": "AI 서버 오류·응답 형식 오류·연결 실패"},
     503: {"model": ChatFailureResponse, "description": "AI 키 미설정"},
     504: {"model": ChatFailureResponse, "description": "AI 응답 시간 초과"},
 }
+
+
+def _db_error_reason(error: Exception) -> str:
+    """
+    [권태현] DB 오류 원인만 짧게 반환
+    SQLAlchemy 예외 문자열에는 질문 내용이 든 SQL 파라미터가 섞여 있어 서버 로그에 그대로 남기지 않음
+    """
+    original = getattr(error, "orig", None)
+    return f"{type(error).__name__}: {original}" if original is not None else type(error).__name__
 
 
 @router.post("", response_model=ChatResponse, responses=CHAT_ERROR_DOCS)
@@ -56,9 +67,9 @@ async def chat_endpoint(
     # 2. 직전 N개 대화 조회 (권태현 함수)
     recent_logs = get_user_chat_logs(user_id=current_user.id, limit=3, db=db)
 
-    # 3. 컨텍스트 구성
+    # 3. 컨텍스트 구성 (FAILED 대화는 빠지므로, 실제로 들어간 SUCCESS 대화 수를 응답에 알려 줌)
     context_messages = build_chat_context(recent_logs=recent_logs, current_prompt=valid_prompt)
-    context_used_count = len(recent_logs)
+    context_used_count = sum(1 for log in recent_logs if log.status == "SUCCESS")
 
     # 4. AI API 호출 (타임아웃 방어) + 걸린 시간 측정
     started = time.perf_counter()
@@ -79,7 +90,7 @@ async def chat_endpoint(
         )
         logger.info(f"[DB 저장 성공] user_id={current_user.id}, status={result.status}, AI 응답 시간={latency_ms}ms")
     except Exception as db_err:
-        logger.error(f"[DB 저장 실패] user_id={current_user.id}, 사유={str(db_err)}")
+        logger.error(f"[DB 저장 실패] user_id={current_user.id}, 사유={_db_error_reason(db_err)}")
         # DB 저장이 실패해도 사용자 채팅 서비스 자체가 죽지 않도록 방어
 
     # 6. 응답 반환 (서버는 멈추지 않고, AI 장애면 원인에 맞는 상태 코드와 안내 문구를 보냄)
