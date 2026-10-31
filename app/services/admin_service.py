@@ -88,9 +88,12 @@ def list_request_logs(
     min_duration_ms: Optional[int] = None,
     exclude_admin: bool = False,
     error_code: Optional[str] = None,
+    since_hours: Optional[int] = None,
 ) -> RequestLogPage:
     """조건에 맞는 요청 로그를 최신순으로 페이지 단위 조회"""
     query = db.query(RequestLog)
+    if since_hours is not None:
+        query = query.filter(RequestLog.created_at >= utc_now() - timedelta(hours=since_hours))
     if status in STATUS_RANGES:
         low, high = STATUS_RANGES[status]
         query = query.filter(RequestLog.status_code.between(low, high))

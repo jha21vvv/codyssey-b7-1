@@ -221,6 +221,20 @@ def test_request_logs_path_user_slow_and_error_code_filters():
     assert request_ids(client.get(base + "&error_code=AUTH_REQUIRED", headers=headers)) == ["r3"]
     assert request_ids(client.get(base + "&error_code=NO_SUCH_CODE", headers=headers)) == []
 
+def test_request_logs_since_hours_filter():
+    headers, _ = login_admin()
+    clear_request_logs()
+    add_request_log(minutes_ago=30, request_id="recent")
+    add_request_log(minutes_ago=60 * 25, request_id="yesterday")
+    add_request_log(minutes_ago=60 * 24 * 8, request_id="lastweek")
+    base = "/api/admin/requests?exclude_admin=true"
+
+    assert request_ids(client.get(base + "&since_hours=1", headers=headers)) == ["recent"]
+    assert request_ids(client.get(base + "&since_hours=24", headers=headers)) == ["recent"]
+    assert request_ids(client.get(base + "&since_hours=168", headers=headers)) == ["recent", "yesterday"]
+    assert request_ids(client.get(base, headers=headers)) == ["recent", "yesterday", "lastweek"]
+    assert_error(client.get(base + "&since_hours=0", headers=headers), 422, "VALIDATION_ERROR")
+
 def test_request_logs_exclude_admin_and_paging():
     headers, _ = login_admin()
     _, alice_id = login("alice")
