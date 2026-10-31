@@ -59,8 +59,14 @@ def test_auth_error_format():
 def test_conflict_error_format():
     client.post("/api/auth/register", json={"username": "alice1", "password": "password123"})
     response = client.post("/api/auth/register", json={"username": "alice1", "password": "password123"})
-    body = assert_error_format(response, 409, "CONFLICT")
+    body = assert_error_format(response, 409, "USERNAME_TAKEN")
     assert body["detail"] == "이미 존재하는 아이디입니다."
+
+def test_login_failure_has_its_own_code():
+    client.post("/api/auth/register", json={"username": "alice1", "password": "password123"})
+    response = client.post("/api/auth/login", json={"username": "alice1", "password": "wrong-password"})
+    body = assert_error_format(response, 401, "INVALID_CREDENTIALS")
+    assert body["detail"] == "아이디 또는 비밀번호가 올바르지 않습니다."
 
 def test_not_found_and_method_not_allowed_in_korean():
     body = assert_error_format(client.get("/api/nothing"), 404, "NOT_FOUND")

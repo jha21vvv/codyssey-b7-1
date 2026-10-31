@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.errors import ApiError
 from app.core.logger import logger  # 안재현 팀원의 표준 로거 임포트
 from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserResponse, TokenResponse
@@ -17,7 +18,7 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == user_in.username).first()
     if user:
         logger.warning(f"[회원가입 실패] 중복 아이디: username={user_in.username}")
-        raise HTTPException(status_code=409, detail="이미 존재하는 아이디입니다.")
+        raise ApiError(409, "USERNAME_TAKEN", "이미 존재하는 아이디입니다.")  # [권태현] 오류 코드로 원인 구분
     
     # 새 유저 생성
     new_user = User(
@@ -38,7 +39,7 @@ def login_user(user_in: UserLogin, request: Request, db: Session = Depends(get_d
     user = db.query(User).filter(User.username == user_in.username).first()
     if not user or not verify_password(user_in.password, user.hashed_password):
         logger.warning(f"[로그인 실패] 인증 정보 불일치: username={user_in.username}")
-        raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+        raise ApiError(401, "INVALID_CREDENTIALS", "아이디 또는 비밀번호가 올바르지 않습니다.")  # [권태현] 오류 코드로 원인 구분
     
     access_token = create_access_token(data={"sub": user.username})
     request.state.user_id = user.id  # [권태현] 요청 로그(request_logs)에 로그인한 사용자를 남김
