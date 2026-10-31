@@ -14,7 +14,7 @@ from app.services import admin_service
 모든 경로는 관리자 계정(role=admin)으로 로그인해야 쓸 수 있습니다.
 - 토큰이 없거나 잘못됨: 401 AUTH_REQUIRED / 일반 사용자: 403 ADMIN_REQUIRED
 - GET /api/admin/summary               : 서비스 상태 요약 (사용자·대화·최근 24시간 요청 통계, 최근 오류)
-- GET /api/admin/requests              : 요청 로그 목록 (상태 코드·주소·사용자·느린 요청 필터)
+- GET /api/admin/requests              : 요청 로그 목록 (상태 코드·주소·사용자·오류 코드·느린 요청 필터)
 - GET /api/admin/requests/{request_id} : 요청 ID 하나로 요청 로그와 대화 로그를 함께 추적
 - GET /api/admin/chat-logs             : 전체 사용자의 대화 로그 목록 (실패만 보기·사용자 필터)
 """
@@ -46,6 +46,7 @@ def read_request_logs(
     username: Optional[str] = Query(None, max_length=50, description="이 사용자가 보낸 요청만"),
     min_duration_ms: Optional[int] = Query(None, ge=0, description="응답 시간이 이 값(ms) 이상인 느린 요청만"),
     exclude_admin: bool = Query(False, description="관리자 화면이 보낸 요청(/api/admin) 빼고 보기"),
+    error_code: Optional[str] = Query(None, max_length=50, description="이 오류 코드가 난 요청만 (예: AI_TIMEOUT)"),
     admin: User = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
@@ -59,6 +60,7 @@ def read_request_logs(
         username=username,
         min_duration_ms=min_duration_ms,
         exclude_admin=exclude_admin,
+        error_code=error_code,
     )
     logger.info(f"[관리자 조회] 요청 로그 admin_id={admin.id}, status={status}, 건수={len(page.items)}/{page.total}")
     return page

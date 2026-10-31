@@ -204,7 +204,7 @@ def test_request_logs_status_filters():
     assert request_ids(client.get(query + "2xx", headers=headers)) == ["r2", "r1"]
     assert_error(client.get(query + "teapot", headers=headers), 422, "VALIDATION_ERROR")
 
-def test_request_logs_path_user_and_slow_filters():
+def test_request_logs_path_user_slow_and_error_code_filters():
     headers, _ = login_admin()
     _, alice_id = login("alice")
     seed_request_logs(alice_id)
@@ -217,6 +217,9 @@ def test_request_logs_path_user_and_slow_filters():
     assert request_ids(client.get(base + "&username=nobody", headers=headers)) == []
     assert request_ids(client.get(base + "&min_duration_ms=1000", headers=headers)) == ["r4", "r2"]
     assert request_ids(client.get(base + "&status=errors&path=/api/chat", headers=headers)) == ["r4"]
+    # 관리자 화면의 "많이 난 오류 코드"를 누르면 그 코드가 난 요청만 보여줌
+    assert request_ids(client.get(base + "&error_code=AUTH_REQUIRED", headers=headers)) == ["r3"]
+    assert request_ids(client.get(base + "&error_code=NO_SUCH_CODE", headers=headers)) == []
 
 def test_request_logs_exclude_admin_and_paging():
     headers, _ = login_admin()

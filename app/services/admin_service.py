@@ -87,6 +87,7 @@ def list_request_logs(
     username: Optional[str] = None,
     min_duration_ms: Optional[int] = None,
     exclude_admin: bool = False,
+    error_code: Optional[str] = None,
 ) -> RequestLogPage:
     """조건에 맞는 요청 로그를 최신순으로 페이지 단위 조회"""
     query = db.query(RequestLog)
@@ -103,6 +104,8 @@ def list_request_logs(
         query = query.filter(RequestLog.user_id == user_id)
     if min_duration_ms is not None:
         query = query.filter(RequestLog.duration_ms >= min_duration_ms)
+    if error_code:
+        query = query.filter(RequestLog.error_code == error_code)
     if exclude_admin:
         query = query.filter(~RequestLog.path.startswith(ADMIN_PATH_PREFIX))
 
