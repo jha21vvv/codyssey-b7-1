@@ -28,9 +28,9 @@
 
 ### 3) 핵심 사용자 시나리오 (Key Scenarios)
 1. **회원가입 및 로그인**: 사용자는 안전한 비밀번호 단방향 해싱(bcrypt)을 통해 계정을 생성하고, JWT Bearer 토큰을 발급받아 세션을 수립합니다. (비로그인 사용자는 챗봇 입력이 비활성화됩니다.)
-2. **문맥 기반 실시간 대화**: 사용자가 질문을 전송하면 백엔드 서버가 최근 직전 3개의 성공 대화 이력을 프롬프트에 자동으로 조합하여 AI 모델(OpenAI / Gemini)에 비동기 전달하고, 같은 화면에서 스트리밍 형태로 답변을 출력합니다.
+2. **문맥 기반 실시간 대화**: 사용자가 질문을 전송하면 백엔드 서버가 최근 직전 3개의 성공 대화 이력을 프롬프트에 자동으로 조합하여 AI 모델(OpenAI / Gemini)에 비동기 전달하고, 같은 화면의 말풍선에 답변을 출력합니다. (답변을 다 받은 뒤 한 번에 표시하고, 기다리는 동안 로딩 애니메이션을 보여줍니다.)
 3. **대화 이력 영속화 및 추적**: 모든 질의응답은 사용자 식별자, 생성 일시, 성공/실패 상태코드와 함께 SQLite에 안전하게 기록되며, 사용자는 사이드바 또는 API(`GET /api/logs/me`)를 통해 본인의 대화 이력을 언제든지 다시 조회할 수 있습니다.
-4. **장애 방어 및 무중단 운영**: 외부 AI API가 지연되거나 타임아웃(10초)이 발생해도 500 에러를 뿜지 않고 정중한 Fallback 안내를 반환하며, 서버의 4대 표준 로그(`[요청 수신]`, `[AI 호출]`, `[AI 응답]`, `[DB 저장]`)로 원인을 즉시 추적할 수 있습니다.
+4. **장애 방어 및 운영 추적**: 외부 AI API가 지연되거나 실패해도 서버는 멈추지 않고, 원인에 맞는 상태 코드(타임아웃 504, AI 오류 502, AI 미설정 503)와 안내 문구를 반환합니다. 모든 API 요청은 요청 로그(DB `request_logs`)에 남고, 같은 요청 ID가 응답 헤더·서버 로그(`[요청 수신]`, `[AI 호출]`, `[AI 응답]`, `[DB 저장]`)·대화 로그에 함께 기록되어 문제가 생긴 요청을 끝까지 추적할 수 있습니다.
 
 ---
 
@@ -63,12 +63,15 @@ flowchart TB
             S_Auth["auth_service.py<br>(JWT & Bcrypt)"]
             S_AI["ai_service.py<br>(Context Builder & Timeout)"]
             S_Log["log_service.py<br>(Log Query & Persistence)"]
+            S_Req["request_log_service.py<br>(Request Log Persistence)"]
         end
 
         subgraph Core ["Infrastructure"]
             CFG["config.py<br>(BaseSettings & .env)"]
             DB_ENG["database.py<br>(SessionLocal & Engine)"]
-            LOG["logger.py<br>(Standard Logger)"]
+            LOG["logger.py<br>(Standard Logger & Request-ID)"]
+            ERR["errors.py<br>(Common Error Response)"]
+            MIG["migrations.py<br>(Schema Upgrade)"]
         end
     end
 
@@ -90,6 +93,8 @@ flowchart TB
     R_Log --> S_Log
     S_Auth --> DB
     S_Log --> DB
+    MW -->|API 요청마다| S_Req
+    S_Req --> DB
     S_AI -->|Async Timeout=10s| AI_API
 ```
 
@@ -98,7 +103,9 @@ flowchart TB
 * **인프라 & 로깅 (`app/core/`)**:
   * `config.py`: Pydantic BaseSettings 기반의 안전한 환경 변수 관리 (민감정보 은닉)
   * `database.py`: SQLAlchemy 기반 SQLite 세션 제너레이터(`get_db`) 제공
-  * `logger.py`: 고유 `Request-ID` 부여, 역방향 프록시(`X-Forwarded-For`) 클라이언트 IP 추출, `[요청 수신]` 이벤트 자동 기록
+  * `logger.py`: 고유 `Request-ID` 부여, 역방향 프록시(`X-Forwarded-For`) 클라이언트 IP 추출, `[요청 수신]` 이벤트 자동 기록, 모든 로그 줄에 `[요청 ID]` 표시, API 요청을 요청 로그(DB)에 저장
+  * `errors.py`: 모든 오류를 `{detail, code, request_id}` 공통 형식으로 응답 (422 한국어 안내, 500 내부 정보 숨김)
+  * `migrations.py`: 이전 버전으로 만든 DB에 새 컬럼을 서버 시작 때 자동 추가
 * **인증 & 보안 (`app/api/auth_router.py`, `app/services/auth_service.py`)**:
   * bcrypt 비밀번호 암호화, JWT Access Token 발급 및 검증
   * `get_current_user` 의존성을 통한 비인가 401 Unauthorized 사전 차단
@@ -108,6 +115,7 @@ flowchart TB
   * 타임아웃(10초) 방어 및 비정상 종료(500) 원천 방지 Fallback 응답
 * **대화 로그 & UI (`app/api/log_router.py`, `app/services/log_service.py`, `static/`, `templates/`)**:
   * 대화 로그 누적 저장 및 사용자/관리자 조회 API 제공
+  * 요청 로그 저장 (`app/services/request_log_service.py`, `request_logs` 테이블)
   * 모던 모바일 반응형 챗봇 SPA 화면 구성
 
 ---
@@ -132,6 +140,24 @@ erDiagram
         text response "AI 응답 또는 Fallback 안내"
         string status "처리 상태 (SUCCESS / FAILED)"
         datetime created_at "대화 발생 일시 (UTC)"
+        string request_id "요청 ID (요청 로그·서버 로그와 연결)"
+        int latency_ms "AI 응답 시간(ms)"
+        string error_type "실패 종류 (TIMEOUT 등)"
+    }
+    users ||--o{ request_logs : "sends"
+    request_logs ||--o| chat_logs : "같은 요청 ID"
+    request_logs {
+        int id PK "자동 증가 번호"
+        string request_id "요청 ID (응답 헤더 X-Request-ID)"
+        string method "HTTP 방법"
+        string path "요청 주소"
+        int status_code "응답 상태 코드"
+        int duration_ms "처리 시간(ms)"
+        int user_id "로그인 사용자 (없으면 NULL)"
+        string client_ip "요청 IP"
+        string user_agent "브라우저 정보"
+        string error_code "오류 코드"
+        datetime created_at "요청 시각 (UTC)"
     }
 ```
 
@@ -152,8 +178,38 @@ erDiagram
 | `user_id` | INTEGER | FOREIGN KEY (`users.id`), NOT NULL | 질문 작성 사용자 ID |
 | `prompt` | TEXT | NOT NULL | 사용자 입력 질문 (공백 제거 후 최대 1,000자) |
 | `response` | TEXT | NOT NULL | AI 응답 텍스트 또는 장애 발생 시 Fallback 문구 |
-| `status` | VARCHAR(20) | DEFAULT 'SUCCESS' | AI 호출 처리 상태 (`SUCCESS` 또는 `FAILED`) |
-| `created_at` | DATETIME | DEFAULT utcnow, INDEX | 대화 저장 시각 (최신순 정렬용) |
+| `status` | VARCHAR(20) | NOT NULL, DEFAULT 'SUCCESS' | AI 호출 처리 상태 (`SUCCESS` 또는 `FAILED`) |
+| `created_at` | DATETIME | NOT NULL, DEFAULT utc_now, INDEX | 대화 저장 시각 (UTC, 최신순 정렬용) |
+| `request_id` | VARCHAR(16) | NULL 허용, INDEX | 요청 ID. 요청 로그·서버 로그에서 같은 값으로 찾을 수 있음 |
+| `latency_ms` | INTEGER | NULL 허용 | AI 응답까지 걸린 시간(ms) |
+| `error_type` | VARCHAR(30) | NULL 허용 | 실패 종류: `TIMEOUT`, `UPSTREAM_ERROR`, `BAD_RESPONSE`, `CONNECTION_ERROR`, `UNEXPECTED_ERROR`, `NOT_CONFIGURED` (성공이면 NULL) |
+
+#### 3) `request_logs` 테이블 (요청 로그)
+모든 API 요청(`/api/...`)을 한 줄씩 기록합니다. 화면·정적 파일·헬스체크 요청은 양이 많아 제외합니다.
+
+| 컬럼명 | 데이터 타입 | 제약 조건 | 설명 |
+| :--- | :--- | :--- | :--- |
+| `id` | INTEGER | PRIMARY KEY | 요청 로그 번호 |
+| `request_id` | VARCHAR(16) | NOT NULL, INDEX | 요청 ID (응답 헤더 `X-Request-ID`, 오류 응답의 `request_id`와 같은 값) |
+| `method` | VARCHAR(10) | NOT NULL | HTTP 방법 (GET, POST 등) |
+| `path` | VARCHAR(255) | NOT NULL, INDEX | 요청 주소 (쿼리 문자열 제외) |
+| `status_code` | INTEGER | NOT NULL, INDEX | 응답 상태 코드 |
+| `duration_ms` | INTEGER | NOT NULL | 요청을 받고 응답할 때까지 걸린 시간(ms) |
+| `user_id` | INTEGER | NULL 허용, INDEX | 로그인한 사용자 번호 (사용자가 지워져도 기록이 남도록 외래키는 걸지 않음) |
+| `client_ip` | VARCHAR(64) | NULL 허용 | 요청 IP (터널·프록시 환경은 `X-Forwarded-For` 우선) |
+| `user_agent` | VARCHAR(255) | NULL 허용 | 브라우저·클라이언트 정보 |
+| `error_code` | VARCHAR(50) | NULL 허용 | 오류 응답의 `code` (예: `AUTH_REQUIRED`, `AI_TIMEOUT`) |
+| `created_at` | DATETIME | NOT NULL, INDEX | 요청 시각 (UTC) |
+
+### 스키마 변경(마이그레이션) 절차
+`Base.metadata.create_all`은 없는 테이블만 만들고, 이미 있는 테이블에 새 컬럼을 추가하지 않습니다. 그래서 서버가 시작할 때 `app/core/migrations.py`의 `upgrade_schema`가 이전 버전 DB에 빠진 컬럼과 인덱스를 `ALTER TABLE`로 추가합니다. 기존 기록은 그대로 두고, 여러 번 실행해도 안전합니다.
+
+1. 운영 중인 DB 파일(`chat_service.db`)을 먼저 복사해 백업합니다.
+2. 모델(`app/models/*.py`)에 컬럼을 추가하고, 같은 컬럼을 `app/core/migrations.py`의 `ADDED_COLUMNS`에 적습니다. 새 컬럼은 기존 행에 영향이 없도록 NULL을 허용하거나 기본값을 둡니다.
+3. 서버를 다시 시작하면 서버 로그에 `[DB 마이그레이션] 컬럼 추가: 테이블.컬럼`이 남습니다.
+4. `python scripts/verify_logs.py`나 `sqlite3`로 기존 기록이 그대로인지 확인합니다.
+
+컬럼 이름 변경·삭제처럼 복잡한 변경이 생기면 변경 이력을 관리하는 Alembic 도입을 권장합니다.
 
 ---
 
@@ -161,17 +217,60 @@ erDiagram
 
 모든 API는 대화형 인터랙티브 문서(Swagger UI: `/docs`, ReDoc: `/redoc`)에서도 실시간 테스트 가능합니다.
 
+### 공통 오류 응답 형식
+모든 오류는 같은 형식으로 응답합니다 (`app/core/errors.py`).
+
+```json
+{
+  "detail": "로그인이 필요한 서비스입니다.",
+  "code": "AUTH_REQUIRED",
+  "request_id": "3f9a1c2b"
+}
+```
+* `detail`: 사용자에게 보여줄 한국어 안내
+* `code`: 오류 종류를 프로그램이 구분하는 값
+* `request_id`: 응답 헤더 `X-Request-ID`, 서버 로그, 요청 로그와 같은 값이라 문의·장애 추적에 사용
+* 입력 검증 오류(422)는 항목별 안내가 담긴 `errors`가 추가되고, 입력한 값(비밀번호 등)은 응답에 다시 싣지 않습니다.
+
+| 상태 코드 | code | 발생 상황 | 예시 detail |
+| :---: | :--- | :--- | :--- |
+| 401 | `AUTH_REQUIRED` | 토큰 없음·잘못된 토큰·만료 | 로그인이 필요한 서비스입니다. |
+| 401 | `INVALID_CREDENTIALS` | 로그인 실패 | 아이디 또는 비밀번호가 올바르지 않습니다. |
+| 403 | `FORBIDDEN` | 관리자 기능 권한 없음 | 관리자 키가 올바르지 않습니다. |
+| 404 | `NOT_FOUND` | 없는 주소 | 요청한 주소를 찾을 수 없습니다. |
+| 405 | `METHOD_NOT_ALLOWED` | 허용되지 않은 방식 (예: 채팅을 GET으로) | 허용되지 않은 요청 방식입니다. |
+| 409 | `USERNAME_TAKEN` | 아이디 중복 | 이미 존재하는 아이디입니다. |
+| 422 | `VALIDATION_ERROR` | 입력 형식 오류 (길이·아이디 규칙·JSON 형식·조회 개수 범위) | 아이디는 3자 이상이어야 합니다. |
+| 422 | `PROMPT_INVALID` | 공백만 있는 질문 | 질문 내용이 비어 있습니다. 텍스트를 입력해주세요. |
+| 500 | `INTERNAL_ERROR` | 예상하지 못한 서버 오류 (내부 정보는 숨김) | 서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요. |
+| 502 | `AI_UPSTREAM_ERROR` · `AI_BAD_RESPONSE` · `AI_CONNECTION_ERROR` · `AI_UNEXPECTED_ERROR` | AI 서버 오류 응답 · 빈 답변·다른 형식 · 연결 실패 · 그 밖의 예외 | 현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요. |
+| 503 | `AI_NOT_CONFIGURED` | 서버에 AI 키가 설정되지 않음 | 현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요. |
+| 504 | `AI_TIMEOUT` | AI 응답 시간 초과 (기본 10초) | AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요. |
+
+### 공개 API와 로그인이 필요한 API
+| 구분 | API |
+| :--- | :--- |
+| 공개 | `GET /health`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout` |
+| 로그인 필요 (`Authorization: Bearer <토큰>`) | `GET /api/auth/me`, `POST /api/chat`, `GET /api/logs/me` |
+| 관리자 전용 | `GET /api/logs/admin` |
+
 ### 1) 시스템 헬스체크
 * **엔드포인트**: `GET /health`
-* **설명**: 서버 기동 상태 및 DB 연결 점검
+* **설명**: 서버 기동 상태와 DB 연결을 실제로 확인합니다 (`SELECT 1`). DB에 문제가 있으면 `503`을 돌려줘 외부 모니터링(Cloudflare Health Check, UptimeRobot 등)이 장애를 알아챌 수 있습니다.
 * **응답 예시 (`200 OK`)**:
   ```json
   {
     "status": "healthy",
     "project": "Codyssey B7-1 AI Chatbot",
-    "database": "chat_service.db"
+    "version": "1.1.0",
+    "uptime_seconds": 3600,
+    "checked_at": "2026-10-31T09:12:14Z",
+    "database": {"status": "ok", "file": "./chat_service.db"},
+    "ai": {"configured": true}
   }
   ```
+* **DB 장애 시 (`503 Service Unavailable`)**: `"status": "unhealthy"`, `"database": {"status": "error", ...}`
+* `ai.configured`는 AI 키가 설정됐는지만 알려 주고, 키 값은 보내지 않습니다.
 
 ---
 
@@ -192,8 +291,19 @@ erDiagram
   }
   ```
 * **실패 응답**:
-  * `409 Conflict`: 이미 사용 중인 아이디인 경우
-  * `422 Unprocessable Entity`: 아이디 규칙(영문·숫자 3~50자) 또는 비밀번호(4자 이상) 위반 시
+  * `409 Conflict` (`USERNAME_TAKEN`): 이미 사용 중인 아이디
+  * `422 Unprocessable Entity` (`VALIDATION_ERROR`): 아이디 규칙(영문·숫자 3~50자) 또는 비밀번호(4~100자, 공백만 불가) 위반
+  ```json
+  {
+    "detail": "아이디는 3자 이상이어야 합니다.\n비밀번호는 4자 이상이어야 합니다.",
+    "code": "VALIDATION_ERROR",
+    "request_id": "8c1d2e3f",
+    "errors": [
+      {"field": "username", "message": "아이디는 3자 이상이어야 합니다."},
+      {"field": "password", "message": "비밀번호는 4자 이상이어야 합니다."}
+    ]
+  }
+  ```
 
 #### ② 로그인 (`POST /api/auth/login`)
 * **요청 본문 (JSON)**:
@@ -217,7 +327,9 @@ erDiagram
 * **실패 응답 (`401 Unauthorized`)**:
   ```json
   {
-    "detail": "아이디 또는 비밀번호가 올바르지 않습니다."
+    "detail": "아이디 또는 비밀번호가 올바르지 않습니다.",
+    "code": "INVALID_CREDENTIALS",
+    "request_id": "a1b2c3d4"
   }
   ```
 
@@ -252,17 +364,23 @@ erDiagram
     "context_used_count": 2
   }
   ```
-* **AI 타임아웃/오류 발생 시 응답 (`200 OK` - 무중단 Fallback)**:
+* **AI 장애 시 응답 (`504` 타임아웃 · `502` AI 오류 · `503` AI 키 미설정)**: 서버는 멈추지 않고, 공통 오류 형식에 대화 정보를 더해 응답합니다. 대화는 `status="FAILED"`와 실패 종류(`error_type`)로 DB에 저장되고, 화면은 `response`를 빨간 말풍선으로 보여줍니다.
   ```json
   {
-    "prompt": "...",
+    "detail": "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요.",
+    "code": "AI_TIMEOUT",
+    "request_id": "e7f2bc01",
+    "prompt": "FastAPI에서 비동기 처리가 왜 효율적인가요?",
     "response": "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요.",
     "status": "FAILED",
     "context_used_count": 2
   }
   ```
-* **입력 유효성 검사 실패 (`422 Unprocessable Entity`)**:
-  * 공백만 있는 문자열(`"   "`)이나 1,000자 초과 입력 시 즉시 차단됩니다.
+* **입력 유효성 검사 실패 (`422 Unprocessable Entity`)**: 빈 문자열이나 1,000자 초과는 `VALIDATION_ERROR`, 공백만 있는 질문은 `PROMPT_INVALID`로 AI를 호출하기 전에 막습니다.
+  ```json
+  {"detail": "질문 내용이 비어 있습니다. 텍스트를 입력해주세요.", "code": "PROMPT_INVALID", "request_id": "5d6e7f80"}
+  ```
+* `context_used_count`는 실제로 AI에 함께 보낸 이전 대화 수입니다 (실패한 대화는 빠짐).
 
 ---
 
@@ -339,6 +457,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 | `ALGORITHM` | `HS256` | 선택 | JWT 암호화 알고리즘 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `1440` (24시간) | 선택 | 로그인 세션 유지 시간 |
 | `AI_API_KEY` | *(빈 문자열)* | **필수** | OpenAI API Key 또는 Google Gemini API Key |
+| `AI_BASE_URL` | *(빈 문자열)* | 선택 | 코디세이 AI 콘솔 등 프록시 주소 (비우면 OpenAI/Gemini 공식 주소) |
 | `AI_MODEL_NAME` | `gpt-4o-mini` | 선택 | 사용할 AI 모델명 (`gpt-4o-mini`, `gemini-1.5-flash` 등) |
 | `AI_TIMEOUT_SECONDS` | `10.0` | 선택 | AI API 비동기 호출 타임아웃 제한 (초 단위) |
 | `ADMIN_API_KEY` | *(빈 문자열)* | 선택 | `GET /api/logs/admin` 전체 로그 조회 보호용 키 |
@@ -376,6 +495,7 @@ chmod +x scripts/run_tunnel.sh
 ## 🔍 7. DB 대화 로그 확인 가이드 (평가자 검증)
 
 평가 시 SQLite DB에 사용자 질문과 AI 응답이 정확히 영속화되었는지 아래 3가지 방법 중 편리한 방식을 선택하여 확인할 수 있습니다.
+DB 파일은 서버를 실행한 폴더의 `chat_service.db`이며(`DATABASE_URL`), 다른 위치의 파일은 `--db` 옵션으로 지정합니다. 대화 로그를 저장하는 목적(추적·운영·개선)과 요청 로그 활용은 8장 "운영 모니터링과 장애 추적"에 정리했습니다.
 
 ### 방법 1: 전용 CLI 검증 스크립트 실행 (가장 간편)
 저장소에 내장된 `scripts/verify_logs.py` 스크립트를 실행하면 터미널에서 즉시 최근 대화 로그를 확인할 수 있습니다:
@@ -386,6 +506,9 @@ python scripts/verify_logs.py
 
 # 최근 20건 출력 및 특정 사용자 필터링
 python scripts/verify_logs.py --limit 20 --user alice
+
+# 다른 위치의 DB 파일 지정
+python scripts/verify_logs.py --db ./backup/chat_service.db
 ```
 *출력 예시:*
 ```text
@@ -402,7 +525,7 @@ DB 파일: .../chat_service.db
 ```
 
 ### 방법 2: SQL 스크립트 실행
-제공된 `scripts/verify_db.sql` 파일을 SQLite CLI 또는 DB 도구(DBeaver, DB Browser for SQLite)에서 실행:
+제공된 `scripts/verify_db.sql` 파일을 SQLite CLI 또는 DB 도구(DBeaver, DB Browser for SQLite)에서 실행합니다. 사용자 목록, 최근 대화, 상태별 통계, 실패한 대화와 실패 종류, 최근 요청 로그, 상태 코드별 요청 수·평균 응답 시간이 나옵니다.
 
 ```bash
 sqlite3 chat_service.db < scripts/verify_db.sql
@@ -422,7 +545,53 @@ curl -X GET "http://localhost:8080/api/logs/admin?limit=10" \
 
 ---
 
-## 👥 8. 팀 구성원 역할 및 개인별 작업 요약 (R&R)
+## 🛰️ 8. 운영 모니터링과 장애 추적
+
+### 1) 로그 3종과 용도
+| 로그 | 위치 | 남는 내용 | 언제 보나 |
+| :--- | :--- | :--- | :--- |
+| 서버 로그 | 콘솔, 프로젝트 루트 `server.log` | `[요청 수신]` → `[AI 호출]` → `[AI 응답 수신/실패]` → `[DB 저장 성공/실패]` → `[응답 완료]`, 줄마다 `[요청 ID]` | 장애 원인 확인 (타임아웃, AI 서버 상태 코드 등) |
+| 요청 로그 | DB `request_logs` | API 요청마다 주소, 상태 코드, 응답 시간, 사용자, 오류 코드 | 오류율, 느린 요청, 사용자별 요청 흐름 |
+| 대화 로그 | DB `chat_logs` | 질문, 답변, 성공/실패, 실패 종류, AI 응답 시간, 요청 ID | 사용자별 대화 이력, AI 실패 분석 |
+
+### 2) 요청 ID로 요청 하나 추적하기
+1. 화면의 오류 안내, 응답 헤더 `X-Request-ID`, 오류 응답의 `request_id`에서 요청 ID를 확인합니다. (예: `e7f2bc01`)
+2. 서버 로그에서 같은 ID를 찾습니다.
+   ```bash
+   grep "\[e7f2bc01\]" server.log                       # Mac / Linux
+   Select-String -Path server.log -Pattern "e7f2bc01"    # Windows PowerShell
+   ```
+   ```text
+   2026-10-31 09:12:33 | INFO    | [e7f2bc01] [요청 수신] POST /api/chat (from 127.0.0.1)
+   2026-10-31 09:12:33 | INFO    | [e7f2bc01] [AI 호출] [AI 호출 시작] 모델=gpt-4o-mini, ...
+   2026-10-31 09:12:43 | ERROR   | [e7f2bc01] [AI 응답 실패] [AI 타임아웃] 10.0초 초과
+   2026-10-31 09:12:43 | INFO    | [e7f2bc01] [DB 저장 성공] user_id=3, status=FAILED, AI 응답 시간=10012ms
+   2026-10-31 09:12:43 | INFO    | [e7f2bc01] [응답 완료] POST /api/chat -> status=504 (10021.4ms)
+   ```
+3. DB에서 같은 요청의 요청 로그와 대화 로그를 확인합니다.
+   ```sql
+   SELECT method, path, status_code, duration_ms, user_id, error_code FROM request_logs WHERE request_id = 'e7f2bc01';
+   SELECT prompt, status, error_type, latency_ms FROM chat_logs WHERE request_id = 'e7f2bc01';
+   ```
+
+### 3) 헬스체크와 외부 모니터링
+* `GET /health`는 DB에 실제로 질의하고, 실패하면 `503`을 돌려줍니다.
+* Cloudflare Health Check나 UptimeRobot 같은 외부 모니터링에 `https://<배포 주소>/health`를 등록하면 서버나 DB가 멈췄을 때 알림을 받을 수 있습니다.
+* 헬스체크·화면·정적 파일 요청은 요청 로그(DB)에 저장하지 않아, 주기적인 확인으로 기록이 불필요하게 쌓이지 않습니다.
+
+### 4) 로그를 남기는 목적
+* **추적**: 누가, 언제, 어떤 요청을 보냈고 어느 단계에서 실패했는지 요청 ID 하나로 따라갑니다.
+* **운영**: 상태 코드별 요청 수, 오류율, 느린 요청, AI 실패율로 서비스 상태를 판단합니다. (`scripts/verify_db.sql` 4~6번)
+* **개선**: 실패 종류(타임아웃이 많은지, AI 서버 오류가 많은지)와 AI 응답 시간을 보고 타임아웃 설정이나 모델을 조정합니다.
+
+### 5) 로그와 개인정보
+* 서버 로그에는 질문·답변 내용을 남기지 않고 사용자 번호, 상태, 시간만 남깁니다. DB 저장 실패 로그도 질문이 섞인 SQL 파라미터 없이 원인만 기록합니다.
+* 오류 응답에는 입력값(비밀번호 등)이나 내부 예외 내용을 싣지 않고, 요청 ID로만 안내합니다.
+* DB 파일(`*.db`)과 로그 파일(`*.log`)은 `.gitignore`로 저장소에 올라가지 않습니다.
+
+---
+
+## 👥 9. 팀 구성원 역할 및 개인별 작업 요약 (R&R)
 
 과제 요구사항을 기능 단위로 분할하여 4명의 팀원이 균형 있게 기여하였으며, 전원 10회 이상의 실질적인 커밋을 완료했습니다.
 
@@ -435,9 +604,9 @@ curl -X GET "http://localhost:8080/api/logs/admin?limit=10" \
 
 ---
 
-## 🧪 9. 테스트 실행 및 무결성 검증
+## 🧪 10. 테스트 실행 및 무결성 검증
 
-저장소에는 인프라, 인증, AI 파이프라인, 대화 로그, 웹 UI를 검증하는 단위 및 통합 테스트 슈트(총 40개 테스트)가 포함되어 있습니다.
+저장소에는 인프라, 인증, AI 파이프라인, 대화 로그, 웹 UI를 검증하는 단위 및 통합 테스트 슈트(총 76개 테스트)가 포함되어 있습니다.
 
 ```bash
 # 전체 테스트 실행
@@ -448,15 +617,19 @@ pytest -v
 ```
 
 *테스트 스위트 구성:*
-* `tests/test_main.py`: 헬스체크 엔드포인트 및 로깅 미들웨어(Request-ID, 프록시 IP 헤더) 검증
+* `tests/test_main.py`: 헬스체크(DB 실제 확인, DB 장애 시 503) 및 로깅 미들웨어(Request-ID, 프록시 IP 헤더) 검증
 * `tests/test_auth.py`: 회원가입, 로그인, 중복 아이디 차단, JWT 토큰 인가 검증
 * `tests/test_ai_chat.py`: 입력값 검증(빈 문자열 차단), 컨텍스트 누적, 타임아웃 및 DB 장애 방어 검증
 * `tests/test_chat_log.py`: 대화 로그 저장 및 사용자/관리자 조회 API 무결성 검증
 * `tests/test_web_ui.py`: 웹 화면(`GET /`) 및 정적 리소스 서빙 상태 검증
+* `tests/test_request_log.py`: 요청 로그 저장(상태 코드·응답 시간·사용자·오류 코드), 모든 서버 로그 줄의 요청 ID 검증
+* `tests/test_errors.py`: 공통 오류 형식(401·404·405·409·422·500)과 한국어 안내, 입력값·내부 예외 미노출 검증
+* `tests/test_chat_failures.py`: AI 장애별 상태 코드(504·502·503), 빈 응답 처리, 대화 로그 추적 정보, DB 실패 로그의 개인정보 보호 검증
+* `tests/test_migrations.py`: 이전 버전 DB에 새 컬럼을 추가하는 마이그레이션 검증
 
 ---
 
-## 🎯 10. 평가자 전용 단계별 검증 시나리오 (Step-by-Step Test Guide)
+## 🎯 11. 평가자 전용 단계별 검증 시나리오 (Step-by-Step Test Guide)
 
 평가자분께서 본 서비스의 과제 요구사항 충족 여부를 가장 빠르고 직관적으로 점검하실 수 있도록 마련한 **9단계 원클릭 검증 시나리오**입니다.
 
@@ -495,7 +668,7 @@ pytest -v
    # (외부 배포 URL 사용 시: curl https://<배포도메인>/health)
    ```
 3. **검증 포인트**:
-   - `{"status": "healthy", "project": "Codyssey B7-1 AI Chatbot", "database": "chat_service.db"}` 응답 (`200 OK`) 확인
+   - `200 OK`와 `"status": "healthy"`, `"database": {"status": "ok", ...}`, `version`, `uptime_seconds`, `ai.configured` 응답 확인 (DB에 문제가 있으면 `503`과 `"unhealthy"`)
    - 응답 헤더에 고유한 `X-Request-ID`가 포함되어 있는지 확인
 
 ---
@@ -507,7 +680,7 @@ pytest -v
    - **① 프론트엔드 방어 (화면)**: 입력창이 비활성화(`disabled`)되어 타이핑이 불가능하며, placeholder로 `🔒 로그인이 필요합니다`가 표시되는지 확인
    - **② 백엔드 API 방어 (인증 차단 - 아래 방법 중 편한 1가지로 확인)**:
      * **방법 A (가장 추천 - Swagger UI)**:
-       새 탭에서 `http://localhost:8080/docs` 접속 ➔ `POST /api/chat` 클릭 ➔ `Try it out` ➔ `Execute` 클릭 ➔ **`401 Unauthorized` ("로그인이 필요합니다.")** 즉시 반환 확인 (새 터미널 열 필요 없음!)
+       새 탭에서 `http://localhost:8080/docs` 접속 ➔ `POST /api/chat` 클릭 ➔ `Try it out` ➔ `Execute` 클릭 ➔ **`401 Unauthorized`** 와 `{"detail": "로그인이 필요한 서비스입니다.", "code": "AUTH_REQUIRED", "request_id": "..."}` 즉시 반환 확인 (새 터미널 열 필요 없음!)
      * **방법 B (브라우저 F12 개발자 콘솔)**:
        웹 화면에서 `F12` ➔ `Console(콘솔)` 탭 클릭 후 아래 1줄 입력:
        ```javascript
@@ -526,12 +699,12 @@ pytest -v
 ### Step 3. 회원가입 및 입력값 유효성 검사 (과제 요구사항 2, 5)
 1. 화면 중앙의 `회원가입` 버튼을 클릭하여 모달 창을 엽니다.
 2. **입력 유효성 검사 테스트**:
-   - 아이디에 특수문자 입력(`user@#$`) 또는 2자 이하 입력 시 -> 안내 문구 및 가입 차단 확인
-   - 비밀번호를 공백으로만 채우거나 4자 미만 입력 시 -> 가입 차단 확인
+   - 아이디에 특수문자 입력(`user@#$`) 또는 2자 이하 입력 시 -> 서버로 보내기 전에 화면에서 안내 문구와 함께 가입 차단 확인
+   - 비밀번호를 공백으로만 채우면 -> 서버 `422` 응답의 "비밀번호는 공백으로만 구성될 수 없습니다." 안내 확인
 3. **정상 가입**:
    - 아이디: `evaluator01`, 비밀번호: `pass1234` 입력 후 가입 완료 확인 (`201 Created`)
 4. **중복 가입 방어 테스트**:
-   - 동일한 아이디 `evaluator01`로 다시 가입 시도 -> `409 Conflict` ("이미 등록된 아이디입니다.") 친절한 에러 안내 확인
+   - 동일한 아이디 `evaluator01`로 다시 가입 시도 -> `409 Conflict` (`USERNAME_TAKEN`) "이미 존재하는 아이디입니다." 안내 확인
 
 ---
 
@@ -552,12 +725,13 @@ pytest -v
    - 질문: `"그 언어의 대표적인 웹 프레임워크 2가지만 알려줘."` 입력 후 Enter
    - **검증 포인트**: AI가 "그 언어"가 직전 대화의 "파이썬"임을 정확히 인지하고 FastAPI, Django 등을 답변하는지 확인 (최근 대화 이력 3개가 프롬프트에 자동 주입됨)
 3. **공백 입력 차단 테스트 (과제 요구사항 5)**:
-   - 스페이스바만 입력(`"    "`)하거나 빈 상태로 전송 시도 -> 입력 차단 안내 메시지 노출 확인 (`422 Unprocessable Entity`)
+   - 스페이스바만 입력(`"    "`)하거나 빈 상태로 전송 시도 -> 화면이 서버로 보내지 않고 "질문을 입력해주세요." 안내 확인
+   - API로 직접 보내면(`/docs`) 공백만 있는 질문은 `422` (`PROMPT_INVALID`)로 AI를 호출하기 전에 차단
 
 ---
 
 ### Step 6. AI 타임아웃 & 장애 상황 무중단(Fallback) 검증 (과제 요구사항 3, 5)
-외부 AI 서비스의 일시적 장애나 네트워크 타임아웃(10초) 발생 시, 백엔드 프로세스가 `500 Error`로 죽지 않고 사용자에게 정중한 Fallback 안내를 반환하는지 아래 방법으로 확인합니다:
+외부 AI 서비스의 일시적 장애나 네트워크 타임아웃(10초) 발생 시, 서버가 멈추지 않고 원인에 맞는 상태 코드(타임아웃 `504`, AI 오류 `502`, AI 키 미설정 `503`)와 안내 문구를 반환하는지 아래 방법으로 확인합니다:
 
 * **방법 A (가장 추천 - 자동화 단위 테스트로 1초 만에 확인)**:
   새 터미널에서 타임아웃 및 장애 모의 테스트를 실행합니다:
@@ -569,16 +743,17 @@ pytest -v
   pytest tests/test_ai_chat.py -k fallback
   ```
   * **결과**: 타임아웃(`TimeoutException`) 및 API 장애 시 서버 무중단 처리 테스트 3건 전원 통과 (`3 passed`) 확인
+  * 상태 코드별 응답까지 보려면 `pytest tests/test_chat_failures.py -v`를 실행합니다.
 * **방법 B (실제 브라우저 화면에서 눈으로 직접 확인)**:
   1. `.env` 파일의 타임아웃 설정을 0.001초로 일시 수정: `AI_TIMEOUT_SECONDS=0.001`
   2. 브라우저 챗봇 화면에서 아무 질문이나 입력 후 전송
-  3. **결과**: 서버가 에러를 내며 꺼지지 않고, 화면에 즉시 `"AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요."` 안내 말풍선이 출력되는 것을 확인
+  3. **결과**: 서버가 꺼지지 않고, 화면에 즉시 `"AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요."` 안내 말풍선이 출력되는 것을 확인 (개발자 도구 Network 탭에서는 `504`, 응답 본문 `code`는 `AI_TIMEOUT`)
   *(확인 후 `.env` 값을 다시 `AI_TIMEOUT_SECONDS=10.0`으로 원복)*
-* **방법 C (이미 DB에 안전하게 기록된 실제 장애 방어 로그 확인)**:
+* **방법 C (DB에 기록된 장애 대화 확인)**:
   ```bash
   python scripts/verify_logs.py
   ```
-  * 과거 초기 키 등록 전 전송되었던 질문(`"고양이"`)이 `status: FAILED` 상태와 함께 `"현재 AI 서비스가 원활하지 않습니다..."` 응답으로 SQLite에 안전하게 보존되어 있음을 확인
+  * 방법 B로 보낸 질문이 `상태: FAILED`와 안내 문구 응답으로 SQLite에 저장되어 있는지 확인합니다. 실패 종류(`error_type`)와 AI 응답 시간은 `sqlite3 chat_service.db < scripts/verify_db.sql`의 4번 결과에서 볼 수 있습니다.
 
 ---
 
@@ -602,20 +777,23 @@ pytest -v
 ### Step 8. 필수 4대 서버 로깅 실시간 확인 (과제 요구사항 5, 제약 102)
 과제 필수 4대 이벤트가 정확한 포맷으로 기록되는지 **서버가 실행 중인 터미널 콘솔 창** (또는 프로젝트 루트의 **`server.log`** 파일)에서 실시간으로 확인합니다:
 
-1. `[요청 수신]`: `INFO | [req_id] [요청 수신] POST /api/chat (from 127.0.0.1)`
-2. `[AI 호출]`: `INFO | [AI 호출] [AI 호출 시작] 모델=..., 메시지 수=...`
-3. `[AI 응답]`: `INFO | [AI 응답 수신] [AI 응답 수신 성공]` (또는 실패 시 `[AI 응답 실패]`)
-4. `[DB 저장]`: `INFO | [DB 저장 성공] user_id=1, status=SUCCESS` (또는 실패 시 `[DB 저장 실패]`)
+1. `[요청 수신]`: `INFO | [3f9a1c2b] [요청 수신] POST /api/chat (from 127.0.0.1)`
+2. `[AI 호출]`: `INFO | [3f9a1c2b] [AI 호출] [AI 호출 시작] 모델=..., 메시지 수=...`
+3. `[AI 응답]`: `INFO | [3f9a1c2b] [AI 응답 수신] [AI 응답 수신 성공]` (또는 실패 시 `[AI 응답 실패]`)
+4. `[DB 저장]`: `INFO | [3f9a1c2b] [DB 저장 성공] user_id=1, status=SUCCESS, AI 응답 시간=812ms` (또는 실패 시 `[DB 저장 실패]`)
+
+같은 요청의 줄은 모두 같은 `[요청 ID]`로 시작하고, 이 값은 응답 헤더 `X-Request-ID`, 요청 로그(`request_logs`), 대화 로그(`chat_logs.request_id`)에도 같은 값으로 남습니다. 추적 방법은 8장을 참고하세요.
 
 > **💡 로그 저장 위치**:
 > * **서버 실시간 콘솔**: 서버(`run_tunnel.ps1`)가 구동 중인 터미널 창 화면
 > * **로그 파일**: 프로젝트 루트의 `server.log` 파일
 > * **대화 데이터베이스**: SQLite 파일 `chat_service.db` (조회: `python scripts/verify_logs.py`)
+> * **요청 로그**: 같은 DB의 `request_logs` 테이블 (조회: `sqlite3 chat_service.db < scripts/verify_db.sql`의 5~6번)
 
 ---
 
 ### Step 9. 전체 자동화 단위 테스트 실행 (과제 요구사항 7)
-프로젝트 전 영역의 기능 무결성을 보증하는 42개 테스트를 일괄 실행합니다:
+프로젝트 전 영역의 기능 무결성을 보증하는 76개 테스트를 일괄 실행합니다:
 ```powershell
 # Windows:
 .\.venv\Scripts\pytest -v
@@ -623,4 +801,4 @@ pytest -v
 # Mac / Linux:
 pytest -v
 ```
-* **결과**: `42 passed` 확인 (인증, 챗봇, DB 영속화, 헬스체크, 웹 화면 서빙 100% 통과)
+* **결과**: `76 passed` 확인 (인증, 챗봇, AI 장애 처리, DB 영속화, 요청 로그, 오류 형식, 헬스체크, 웹 화면 서빙 100% 통과)
