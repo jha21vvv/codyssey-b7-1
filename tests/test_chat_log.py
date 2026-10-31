@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import Base, get_db
 from app.models.user import User
 from app.models.chat_log import ChatLog
-from app.services.log_service import save_chat_log, get_user_chat_logs, get_all_chat_logs
+from app.services.log_service import save_chat_log, get_user_chat_logs, get_all_chat_logs, count_all_chat_logs
 
 """
 [권태현 전담] 대화 로그 저장·조회 서비스와 로그 조회 API(/api/logs) 검증 테스트
@@ -131,6 +131,23 @@ def test_get_all_chat_logs_pages_all_users_newest_first(db):
 
     page = get_all_chat_logs(skip=1, limit=1, db=db)
     assert [log.prompt for log in page] == ["두 번째 질문"]
+
+def test_get_all_chat_logs_filters_by_status_and_user(db):
+    alice_id = create_user(db, "alice")
+    bob_id = create_user(db, "bob")
+    save_chat_log(user_id=alice_id, prompt="alice 성공", response="답변", status="SUCCESS", db=db)
+    save_chat_log(user_id=alice_id, prompt="alice 실패", response="안내 문구", status="FAILED", db=db)
+    save_chat_log(user_id=bob_id, prompt="bob 실패", response="안내 문구", status="FAILED", db=db)
+
+    failed = get_all_chat_logs(skip=0, limit=100, db=db, status="FAILED")
+    assert [log.prompt for log in failed] == ["bob 실패", "alice 실패"]
+    alice_failed = get_all_chat_logs(skip=0, limit=100, db=db, status="FAILED", user_id=alice_id)
+    assert [log.prompt for log in alice_failed] == ["alice 실패"]
+
+    # 전체 건수는 페이지 크기와 상관없이 같은 조건으로 셈
+    assert count_all_chat_logs(db=db) == 3
+    assert count_all_chat_logs(db=db, status="FAILED") == 2
+    assert count_all_chat_logs(db=db, user_id=bob_id) == 1
 
 # -------------------------------------------------------------
 # 2. 내 대화 이력 조회 API (GET /api/logs/me)

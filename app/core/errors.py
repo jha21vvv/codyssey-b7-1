@@ -38,7 +38,7 @@ DEFAULT_MESSAGES = {
 }
 
 # 입력값 검증(422) 안내에 쓰는 항목 이름
-FIELD_LABELS = {"username": "아이디", "password": "비밀번호", "prompt": "질문"}
+FIELD_LABELS = {"username": "아이디", "password": "비밀번호", "prompt": "질문", "request_id": "요청 ID"}
 
 
 class ApiError(StarletteHTTPException):
