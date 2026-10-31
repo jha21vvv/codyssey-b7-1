@@ -24,9 +24,6 @@ class Settings(BaseSettings):
     AI_BASE_URL: str = ""  # 커스텀/프록시 엔드포인트 (코디세이 콘솔 등)
     AI_MODEL_NAME: str = "gpt-4o-mini"
     AI_TIMEOUT_SECONDS: float = 10.0  # 타임아웃 기본 10초 명시
-
-    # 전체 대화 로그 조회 키 (권태현 로그 API의 GET /api/logs/admin에서 사용, 비어 있으면 기능 꺼짐)
-    ADMIN_API_KEY: str = ""
     
     model_config = SettingsConfigDict(
         env_file=".env",

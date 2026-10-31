@@ -6,7 +6,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from app.main import app
-from app.core.config import settings
 from app.core.database import Base, get_db
 from app.models.user import User
 from app.models.chat_log import ChatLog
@@ -14,6 +13,7 @@ from app.services.log_service import save_chat_log, get_user_chat_logs, get_all_
 
 """
 [권태현 전담] 대화 로그 저장·조회 서비스와 로그 조회 API(/api/logs) 검증 테스트
+(관리자용 전체 대화 로그 API는 tests/test_admin.py에서 검증)
 """
 
 # test_auth.py와 같은 StaticPool 인메모리 DB를 쓰되, 엔진을 따로 만들어 두 파일의 데이터가 섞이지 않게 함
@@ -32,8 +32,6 @@ def override_get_db():
         db.close()
 
 client = TestClient(app)
-
-ADMIN_KEY = "test-admin-key"
 
 @pytest.fixture(autouse=True)
 def setup_db():
@@ -188,54 +186,3 @@ def test_my_logs_limit(db):
     # 범위를 벗어난 limit(1~500)은 422로 거부
     assert client.get("/api/logs/me?limit=0", headers=headers).status_code == 422
     assert client.get("/api/logs/me?limit=501", headers=headers).status_code == 422
-
-# -------------------------------------------------------------
-# 3. 전체 대화 로그 조회 API (GET /api/logs/admin)
-# -------------------------------------------------------------
-def test_admin_logs_disabled_when_key_not_set(monkeypatch):
-    monkeypatch.setattr(settings, "ADMIN_API_KEY", "")
-
-    response = client.get("/api/logs/admin", headers={"X-Admin-Key": "anything"})
-    assert response.status_code == 403
-    assert response.json()["detail"] == "전체 로그 조회 기능이 꺼져 있습니다."
-
-def test_admin_logs_with_missing_or_wrong_key_fail(monkeypatch):
-    monkeypatch.setattr(settings, "ADMIN_API_KEY", ADMIN_KEY)
-    user_headers, _ = login_as("alice")
-
-    wrong_requests = [
-        {},                                       # 헤더 없음
-        {"X-Admin-Key": "wrong-key"},             # 틀린 키
-        {"X-Admin-Key": "é".encode("latin-1")},   # ASCII가 아닌 값도 500이 아닌 403
-        user_headers,                             # 일반 사용자 로그인 토큰으로는 볼 수 없음
-    ]
-    for headers in wrong_requests:
-        response = client.get("/api/logs/admin", headers=headers)
-        assert response.status_code == 403
-        assert response.json()["detail"] == "관리자 키가 올바르지 않습니다."
-
-def test_admin_logs_returns_all_users_logs(monkeypatch, db):
-    monkeypatch.setattr(settings, "ADMIN_API_KEY", ADMIN_KEY)
-    alice_id = create_user(db, "alice")
-    bob_id = create_user(db, "bob")
-    save_chat_log(user_id=alice_id, prompt="alice 질문", response="답변", status="SUCCESS", db=db)
-    save_chat_log(user_id=bob_id, prompt="bob 질문", response="답변", status="FAILED", db=db)
-
-    response = client.get("/api/logs/admin", headers={"X-Admin-Key": ADMIN_KEY})
-    assert response.status_code == 200
-    assert [(log["user_id"], log["prompt"]) for log in response.json()] == [(bob_id, "bob 질문"), (alice_id, "alice 질문")]
-
-def test_admin_logs_paging(monkeypatch, db):
-    monkeypatch.setattr(settings, "ADMIN_API_KEY", ADMIN_KEY)
-    user_id = create_user(db, "alice")
-    for i in range(5):
-        save_chat_log(user_id=user_id, prompt=f"질문 {i}", response="답변", status="SUCCESS", db=db)
-    headers = {"X-Admin-Key": ADMIN_KEY}
-
-    response = client.get("/api/logs/admin?skip=1&limit=2", headers=headers)
-    assert response.status_code == 200
-    assert [log["prompt"] for log in response.json()] == ["질문 3", "질문 2"]
-
-    # 범위를 벗어난 skip(0 이상)·limit(1~500)은 422로 거부
-    assert client.get("/api/logs/admin?skip=-1", headers=headers).status_code == 422
-    assert client.get("/api/logs/admin?limit=501", headers=headers).status_code == 422
