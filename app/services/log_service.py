@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models.chat_log import ChatLog
 
@@ -8,7 +8,16 @@ from app.models.chat_log import ChatLog
 로그 조회 API(/api/logs)에서도 사용합니다.
 """
 
-def save_chat_log(user_id: int, prompt: str, response: str, status: str, db: Session) -> ChatLog:
+def save_chat_log(
+    user_id: int,
+    prompt: str,
+    response: str,
+    status: str,
+    db: Session,
+    request_id: Optional[str] = None,
+    latency_ms: Optional[int] = None,
+    error_type: Optional[str] = None,
+) -> ChatLog:
     """
     [과제 요구사항: 대화 로그 누적 저장] 사용자 질문과 AI 응답을 DB에 저장
     저장에 실패하면 세션을 롤백한 뒤 예외를 그대로 올려,
@@ -19,6 +28,9 @@ def save_chat_log(user_id: int, prompt: str, response: str, status: str, db: Ses
         prompt=prompt,
         response=response,
         status=status,
+        request_id=request_id,
+        latency_ms=latency_ms,
+        error_type=error_type,
     )
     # [안내서 대비 변경] 안내서 코드에 없는 롤백 추가: 저장에 실패해도 같은 세션을 계속 쓸 수 있게 함
     try:

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.database import Base, engine, get_db
 from app.core.errors import register_error_handlers
 from app.core.logger import logger, LoggingMiddleware
+from app.core.migrations import upgrade_schema
 from app.core.timeutil import utc_now
 from app.models.user import User  # noqa: F401
 from app.models.chat_log import ChatLog  # noqa: F401
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     # 애플리케이션 시작 시 DB 테이블 자동 생성 (Base 상속 모델들)
     logger.info(f"[{settings.PROJECT_NAME}] 애플리케이션 시작 중... DB 테이블 점검")
     Base.metadata.create_all(bind=engine)
+    upgrade_schema(engine)  # [권태현] 이전 버전으로 만든 DB에 새 컬럼 추가
     logger.info("DB 초기화 완료")
     yield
     logger.info(f"[{settings.PROJECT_NAME}] 애플리케이션 종료")

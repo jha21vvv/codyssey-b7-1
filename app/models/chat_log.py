@@ -19,3 +19,7 @@ class ChatLog(Base):
     status = Column(String(20), default="SUCCESS", nullable=False)  # "SUCCESS" 또는 "FAILED"
     # [안내서 대비 변경] 안내서의 default=datetime.utcnow는 Python 3.12부터 deprecated라 utc_now로 대체 (값은 같음)
     created_at = Column(DateTime, default=utc_now, nullable=False, index=True)  # UTC 기준
+    # [권태현] 운영 추적용 (이전 버전 DB에는 app/core/migrations.py가 컬럼을 추가)
+    request_id = Column(String(16), nullable=True, index=True)  # 요청 로그·서버 로그와 같은 요청 ID
+    latency_ms = Column(Integer, nullable=True)  # AI 응답까지 걸린 시간
+    error_type = Column(String(30), nullable=True)  # 실패 종류 (TIMEOUT, UPSTREAM_ERROR, BAD_RESPONSE 등)
