@@ -1,16 +1,22 @@
+import time
 from pathlib import Path
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.database import Base, engine
+from app.core.database import Base, engine, get_db
 from app.core.errors import register_error_handlers
 from app.core.logger import logger, LoggingMiddleware
+from app.core.timeutil import utc_now
 from app.models.user import User  # noqa: F401
 from app.models.chat_log import ChatLog  # noqa: F401
 from app.models.request_log import RequestLog  # noqa: F401
+from app.services.ai_service import is_ai_configured
 from app.services.request_log_service import record_request
 
 """
@@ -30,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="FastAPI 기반 지능형 웹 AI 챗봇 서비스 (Codyssey B7-1)",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan
 )
 
@@ -51,14 +57,32 @@ app.add_middleware(
 register_error_handlers(app)
 
 # 3. 헬스체크 엔드포인트 (서버 정상 작동 검증용)
+APP_STARTED_AT = time.time()
+
 @app.get("/health", tags=["Health"])
-async def health_check():
-    """서버 및 인프라 상태 점검 엔드포인트"""
-    return {
-        "status": "healthy",
+def health_check(db: Session = Depends(get_db)):
+    """
+    서버 및 인프라 상태 점검 엔드포인트
+    [권태현] DB에 실제로 질의해 연결을 확인하고, 실패하면 503을 돌려줘
+    외부 모니터링(Cloudflare Health Check 등)이 장애를 알아챌 수 있게 함
+    """
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception as e:
+        db_status = "error"
+        logger.error(f"[헬스체크 실패] DB 연결 오류: {type(e).__name__}")
+    healthy = db_status == "ok"
+    body = {
+        "status": "healthy" if healthy else "unhealthy",
         "project": settings.PROJECT_NAME,
-        "database": settings.DATABASE_URL.split("///")[-1]
+        "version": app.version,
+        "uptime_seconds": int(time.time() - APP_STARTED_AT),
+        "checked_at": utc_now().isoformat(timespec="seconds") + "Z",
+        "database": {"status": db_status, "file": settings.DATABASE_URL.split("///")[-1]},
+        "ai": {"configured": is_ai_configured()},  # 키 값은 보내지 않고 설정 여부만
     }
+    return JSONResponse(status_code=200 if healthy else 503, content=body)
 
 # 4. 웹 UI 화면 서빙 [권태현] (정적 파일 /static, 챗봇 화면 GET /)
 # 서버를 실행한 폴더와 상관없이 파일을 찾도록 저장소 루트 기준 경로 사용

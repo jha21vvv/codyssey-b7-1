@@ -20,6 +20,12 @@ FALLBACK_ERROR_MESSAGE = "현재 AI 서비스가 원활하지 않습니다. 잠�
 FALLBACK_TIMEOUT_MESSAGE = "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요."
 
 
+def is_ai_configured() -> bool:
+    """AI 키가 실제로 설정됐는지 (비어 있거나 .env.example의 예시 값이면 False)"""
+    api_key = (settings.AI_API_KEY or "").strip()
+    return bool(api_key) and api_key != "your-actual-api-key-here"
+
+
 def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
     """
     AI_BASE_URL, AI_API_KEY 또는 AI_MODEL_NAME 설정에 따라 API 엔드포인트와 모델명을 결정합니다.
@@ -141,7 +147,7 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
         f"엔드포인트={api_url}, 메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
     )
 
-    if not settings.AI_API_KEY or settings.AI_API_KEY.strip() in ("", "your-actual-api-key-here"):
+    if not is_ai_configured():
         logger.error("[AI 응답 실패] [AI 호출 실패] 유효한 AI_API_KEY가 설정되지 않았습니다.")
         return FALLBACK_ERROR_MESSAGE, "FAILED"
 
