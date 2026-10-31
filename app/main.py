@@ -9,6 +9,8 @@ from app.core.database import Base, engine
 from app.core.logger import logger, LoggingMiddleware
 from app.models.user import User  # noqa: F401
 from app.models.chat_log import ChatLog  # noqa: F401
+from app.models.request_log import RequestLog  # noqa: F401
+from app.services.request_log_service import record_request
 
 """
 [안재현 전담] FastAPI 메인 애플리케이션 엔트리포인트
@@ -32,7 +34,8 @@ app = FastAPI(
 )
 
 # 1. 공통 로깅 미들웨어 등록 (요청 수신 및 응답 추적)
-app.add_middleware(LoggingMiddleware)
+# [권태현] API 요청은 요청 로그(DB request_logs)에도 한 줄씩 저장
+app.add_middleware(LoggingMiddleware, on_request=record_request)
 
 # 2. CORS 미들웨어 등록 (로컬 개발 및 외부 배포 도메인 통신 지원)
 app.add_middleware(

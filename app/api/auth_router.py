@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.logger import logger  # 안재현 팀원의 표준 로거 임포트
@@ -32,7 +32,7 @@ def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
     return {"message": "회원가입이 완료되었습니다."}
 
 @router.post("/login", response_model=TokenResponse)
-def login_user(user_in: UserLogin, db: Session = Depends(get_db)):
+def login_user(user_in: UserLogin, request: Request, db: Session = Depends(get_db)):
     logger.info(f"[로그인 시도] username={user_in.username}")
     
     user = db.query(User).filter(User.username == user_in.username).first()
@@ -41,6 +41,7 @@ def login_user(user_in: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
     
     access_token = create_access_token(data={"sub": user.username})
+    request.state.user_id = user.id  # [권태현] 요청 로그(request_logs)에 로그인한 사용자를 남김
     
     logger.info(f"[로그인 성공] user_id={user.id}, username={user.username}")
     return {
