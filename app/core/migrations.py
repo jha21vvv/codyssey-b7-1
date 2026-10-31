@@ -18,6 +18,10 @@ ADDED_COLUMNS: Dict[str, List[Tuple[str, str]]] = {
         ("latency_ms", "INTEGER"),
         ("error_type", "VARCHAR(30)"),
     ],
+    # 기존 사용자는 모두 일반 사용자(user)로 채워짐 (SQLite는 기본값이 있으면 NOT NULL 컬럼도 추가 가능)
+    "users": [
+        ("role", "VARCHAR(20) NOT NULL DEFAULT 'user'"),
+    ],
 }
 
 # 새 컬럼에 필요한 인덱스 (모델의 index=True가 만드는 이름과 같게)

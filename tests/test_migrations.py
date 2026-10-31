@@ -45,3 +45,24 @@ def test_upgrade_does_nothing_on_current_schema():
 def test_upgrade_skips_missing_tables():
     # 빈 DB에서는 아무것도 하지 않고, 테이블은 create_all이 새 구조로 만듦
     assert upgrade_schema(memory_engine()) == []
+
+def test_upgrade_adds_user_role_with_default():
+    engine = memory_engine()
+    with engine.begin() as conn:
+        # 역할(role) 컬럼이 없던 이전 버전의 users 구조
+        conn.execute(text("""
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY, username VARCHAR(50) NOT NULL UNIQUE,
+                hashed_password VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL
+            )
+        """))
+        conn.execute(text(
+            "INSERT INTO users (username, hashed_password, created_at) VALUES ('alice', 'x', '2026-10-22 07:51:05')"
+        ))
+
+    assert upgrade_schema(engine) == ["users.role"]
+    with engine.begin() as conn:
+        # 기존 사용자는 일반 사용자가 되고, 이후 역할 없이 넣는 사용자도 기본값 user
+        conn.execute(text("INSERT INTO users (username, hashed_password, created_at) VALUES ('bob', 'x', '2026-10-31 00:00:00')"))
+        rows = conn.execute(text("SELECT username, role FROM users ORDER BY id")).all()
+    assert [tuple(row) for row in rows] == [("alice", "user"), ("bob", "user")]
