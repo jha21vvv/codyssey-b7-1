@@ -216,6 +216,8 @@ def test_request_logs_path_user_slow_and_error_code_filters():
     assert request_ids(client.get(base + "&username=alice", headers=headers)) == ["r4", "r2"]
     assert request_ids(client.get(base + "&username=nobody", headers=headers)) == []
     assert request_ids(client.get(base + "&min_duration_ms=1000", headers=headers)) == ["r4", "r2"]
+    # 기준값과 같은 응답 시간(1500ms)도 느린 요청에 포함
+    assert request_ids(client.get(base + "&min_duration_ms=1500", headers=headers)) == ["r4", "r2"]
     assert request_ids(client.get(base + "&status=errors&path=/api/chat", headers=headers)) == ["r4"]
     # 관리자 화면의 "많이 난 오류 코드"를 누르면 그 코드가 난 요청만 보여줌
     assert request_ids(client.get(base + "&error_code=AUTH_REQUIRED", headers=headers)) == ["r3"]
