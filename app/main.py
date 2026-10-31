@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import Base, engine
+from app.core.errors import register_error_handlers
 from app.core.logger import logger, LoggingMiddleware
 from app.models.user import User  # noqa: F401
 from app.models.chat_log import ChatLog  # noqa: F401
@@ -45,6 +46,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# [권태현] 모든 오류를 {detail, code, request_id} 공통 형식으로 응답 (app/core/errors.py)
+register_error_handlers(app)
 
 # 3. 헬스체크 엔드포인트 (서버 정상 작동 검증용)
 @app.get("/health", tags=["Health"])
