@@ -39,3 +39,20 @@ def test_index_page_outside_repo_root(tmp_path):
         text=True,
     )
     assert "STATUS 200" in result.stdout, result.stderr
+
+def test_admin_page_success():
+    """GET /admin 에서 관리자 화면을 반환하고, 화면이 불러오는 CSS·JS가 모두 열림"""
+    response = client.get("/admin")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert 'id="dashboard"' in response.text
+    assets = re.findall(r'(?:href|src)="(/static/[^"]+)"', response.text)
+    assert "/static/js/admin.js" in assets and "/static/css/admin.css" in assets
+    for path in assets:
+        assert client.get(path).status_code == 200, path
+
+def test_admin_page_has_no_data_without_admin_api():
+    """화면 파일에는 로그 데이터가 없음 (데이터는 관리자 API가 관리자 계정인지 확인한 뒤에만 보냄)"""
+    html = client.get("/admin").text
+    assert 'id="requests-body"></tbody>' in html
+    assert 'id="chats-list" class="chat-log-list"></ul>' in html

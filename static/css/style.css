@@ -91,6 +91,11 @@ body {
   outline-offset: 2px;
 }
 
+/* 링크(a)로 만든 버튼도 버튼처럼 밑줄 없이 표시 (관리자 화면 링크 등) */
+a.btn {
+  text-decoration: none;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

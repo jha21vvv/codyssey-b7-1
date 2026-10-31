@@ -86,7 +86,7 @@ def health_check(db: Session = Depends(get_db)):
     }
     return JSONResponse(status_code=200 if healthy else 503, content=body)
 
-# 4. 웹 UI 화면 서빙 [권태현] (정적 파일 /static, 챗봇 화면 GET /)
+# 4. 웹 UI 화면 서빙 [권태현] (정적 파일 /static, 챗봇 화면 GET /, 관리자 화면 GET /admin)
 # 서버를 실행한 폴더와 상관없이 파일을 찾도록 저장소 루트 기준 경로 사용
 BASE_DIR = Path(__file__).resolve().parent.parent
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -96,6 +96,14 @@ templates = Jinja2Templates(directory=BASE_DIR / "templates")
 async def index(request: Request):
     """챗봇 웹 화면 (API가 아니라서 Swagger 문서에는 표시하지 않음)"""
     return templates.TemplateResponse(request, "index.html")
+
+@app.get("/admin", include_in_schema=False)
+async def admin_page(request: Request):
+    """
+    [권태현] 운영 관리자 화면
+    화면 파일에는 데이터가 없고, 데이터는 관리자 API(/api/admin)가 관리자 계정인지 확인한 뒤에만 보냄
+    """
+    return templates.TemplateResponse(request, "admin.html")
 
 # -------------------------------------------------------------
 # [팀원 라우터 연동 슬롯]
