@@ -9,6 +9,7 @@
   // [안내서 대비 변경] 안내서 "받아올 것" 항목의 "token" 대신, 안내서 코드와 신재은 안내서에 맞춰 "access_token" 키로 저장
   const TOKEN_KEY = "access_token";
   const USERNAME_KEY = "username";
+  const ROLE_KEY = "role"; // "user" 또는 "admin" (관리자에게만 관리자 화면 링크 표시)
   const MAX_PROMPT_LENGTH = 1000; // 조명환 ChatRequest·validate_prompt와 같은 최대 길이
   // AI 장애 응답 상태 코드: 502(AI 쪽 오류), 503(AI 키 미설정), 504(AI 응답 시간 초과)
   const AI_FAILURE_STATUSES = [502, 503, 504];
@@ -42,14 +43,21 @@
   // ---------- 로그인 상태 저장 ----------
   const getToken = () => localStorage.getItem(TOKEN_KEY);
 
-  function saveAuth(token, username) {
+  function saveAuth(token, username, role) {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USERNAME_KEY, username);
+    saveRole(role);
+  }
+
+  function saveRole(role) {
+    if (role) localStorage.setItem(ROLE_KEY, role);
+    else localStorage.removeItem(ROLE_KEY);
   }
 
   function clearAuth() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USERNAME_KEY);
+    localStorage.removeItem(ROLE_KEY);
   }
 
   // ---------- API 통신 ----------
@@ -138,7 +146,16 @@
       name.className = "auth-user-name";
       name.textContent = `${localStorage.getItem(USERNAME_KEY) || "사용자"}님`;
       user.append(avatar, name);
-      authInfo.append(user, createButton("로그아웃", "btn btn-light", logout));
+      authInfo.append(user);
+      // 화면에 링크를 보여주는 것일 뿐, 관리자 데이터는 서버가 관리자 계정인지 다시 확인한 뒤에만 보냄
+      if (localStorage.getItem(ROLE_KEY) === "admin") {
+        const adminLink = document.createElement("a");
+        adminLink.className = "btn btn-light admin-link";
+        adminLink.href = "/admin";
+        adminLink.textContent = "관리자";
+        authInfo.append(adminLink);
+      }
+      authInfo.append(createButton("로그아웃", "btn btn-light", logout));
     } else {
       authInfo.append(
         createButton("로그인", "btn btn-light", () => openAuthModal("login")),
@@ -222,7 +239,7 @@
         setFormMessage(loginMessage, "로그인 응답을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
         return;
       }
-      saveAuth(data.access_token, (data.user && data.user.username) || username);
+      saveAuth(data.access_token, (data.user && data.user.username) || username, data.user && data.user.role);
       loginForm.reset();
       closeAuthModal();
       hideBanner();
@@ -583,6 +600,23 @@
     }
   }
 
+  // ---------- 내 정보 다시 확인 (GET /api/auth/me) ----------
+  // 관리자 지정·해제가 다시 로그인하지 않아도 머리줄 링크에 반영되도록, 화면을 열 때 역할을 다시 받아 옴
+  async function refreshUser() {
+    const requestToken = getToken();
+    if (!requestToken) return;
+    try {
+      const { res, data } = await apiRequest("/api/auth/me", { auth: true });
+      // 401(로그인 만료)은 지난 대화 조회(loadHistory)가 안내하므로 여기서는 넘어감
+      if (getToken() !== requestToken || !res.ok || !data || !data.username) return;
+      localStorage.setItem(USERNAME_KEY, data.username);
+      saveRole(data.role);
+      renderAuthInfo();
+    } catch {
+      // 머리줄 갱신에 실패해도 챗봇 사용에는 영향 없음
+    }
+  }
+
   // ---------- 모바일 사이드바 ----------
   function openSidebar() {
     document.body.classList.add("sidebar-open");
@@ -650,4 +684,5 @@
   updateAuthState();
   updateHistoryStatus();
   loadHistory();
+  refreshUser();
 })();

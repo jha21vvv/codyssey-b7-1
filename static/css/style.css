@@ -975,6 +975,13 @@ a.btn {
   }
 }
 
+@media (max-width: 480px) {
+  /* 관리자 링크까지 있으면 머리줄이 좁아지므로 아이디 글자는 숨기고 프로필 원만 남김 */
+  .auth-info:has(.admin-link) .auth-user-name {
+    display: none;
+  }
+}
+
 @media (max-width: 400px) {
   /* 아주 좁은 화면에서는 제목 옆 배지를 숨겨 로그인 버튼 자리를 확보 */
   .app-badge {
