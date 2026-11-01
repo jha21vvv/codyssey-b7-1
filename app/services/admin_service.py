@@ -1,8 +1,11 @@
 import math
 from datetime import timedelta
 from typing import Dict, Iterable, List, Optional
+from pydantic import ValidationError
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
+from app.core.errors import validation_message
+from app.core.logger import logger
 from app.core.timeutil import utc_now
 from app.models.chat_log import ChatLog
 from app.models.request_log import RequestLog
@@ -19,7 +22,8 @@ from app.schemas.admin import (
     RequestTrace,
     UserStats,
 )
-from app.services.auth_service import hash_password
+from app.schemas.user import UserCreate
+from app.services.auth_service import hash_password, verify_password
 from app.services.log_service import count_all_chat_logs, get_all_chat_logs
 
 """
@@ -305,3 +309,49 @@ def create_user_with_role(db: Session, username: str, password: str, role: str) 
 
 def list_admins(db: Session) -> List[User]:
     return db.query(User).filter(User.role == ADMIN_ROLE).order_by(User.id).all()
+
+
+def _password_matches(password: str, hashed_password: str) -> bool:
+    """저장된 해시가 bcrypt 형식이 아니어도(직접 넣은 값 등) 오류 없이 '다름'으로 처리"""
+    try:
+        return verify_password(password, hashed_password)
+    except ValueError:
+        return False
+
+
+def prepare_default_admin(db: Session, username: str, password: str) -> Optional[str]:
+    """
+    [권태현] 서버가 시작할 때 기본 관리자 계정을 준비 (.env의 ADMIN_USERNAME, ADMIN_PASSWORD)
+    - 비밀번호가 비어 있으면 아무것도 하지 않음 (None)
+    - 회원가입과 같은 아이디·비밀번호 규칙에 맞지 않으면 만들지 않음 ("invalid")
+    - 계정이 없으면 관리자로 새로 만들고 ("created"),
+      있으면 관리자 역할과 비밀번호를 설정값에 맞춤 ("updated", 이미 같으면 "unchanged")
+    비밀번호는 로그에 남기지 않음
+    """
+    if not password:
+        return None
+    try:
+        UserCreate(username=username, password=password)
+    except ValidationError as e:
+        reasons = " ".join(dict.fromkeys(validation_message(error) for error in e.errors()))
+        logger.error(f"[기본 관리자 계정] 설정값이 회원가입 규칙에 맞지 않아 준비하지 않음: {reasons}")
+        return "invalid"
+
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        user = create_user_with_role(db, username, password, ADMIN_ROLE)
+        logger.info(f"[기본 관리자 계정] 새로 만듦: user_id={user.id}, username={username}")
+        return "created"
+
+    changes = []
+    if user.role != ADMIN_ROLE:
+        user.role = ADMIN_ROLE
+        changes.append("관리자 지정")
+    if not _password_matches(password, user.hashed_password):
+        user.hashed_password = hash_password(password)
+        changes.append("비밀번호를 설정값으로 맞춤")
+    if not changes:
+        return "unchanged"
+    db.commit()
+    logger.info(f"[기본 관리자 계정] {', '.join(changes)}: user_id={user.id}, username={username}")
+    return "updated"

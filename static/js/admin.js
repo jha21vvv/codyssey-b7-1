@@ -340,7 +340,7 @@
     resetDashboard();
     showView("denied");
     deniedText.replaceChildren(
-      `${username || "이"} 계정은 관리자가 아닙니다. 관리자 권한은 서버(DB 파일)에 접근할 수 있는 운영자가 `,
+      `${username || "이"} 계정은 관리자가 아닙니다. 관리자 계정으로 다시 로그인하세요. 이 아이디를 관리자로 쓰려면 서버(DB 파일)에 접근할 수 있는 운영자가 `,
       el("code", null, `python scripts/create_admin.py ${username || "아이디"}`),
       " 명령으로 지정합니다.",
     );

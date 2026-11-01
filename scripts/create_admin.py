@@ -31,6 +31,8 @@ from app.services.admin_service import create_user_with_role, list_admins, set_u
 """
 [권태현 전담] 관리자 계정 지정·해제 스크립트
 관리자는 웹에서 스스로 될 수 없고, 서버(DB 파일)에 접근할 수 있는 운영자만 이 스크립트로 지정합니다.
+기본 관리자 계정(.env의 ADMIN_USERNAME·ADMIN_PASSWORD)은 서버가 시작할 때 자동으로 준비되므로,
+이 스크립트는 그 밖의 가입 아이디를 관리자로 지정하거나 해제할 때 씁니다.
 
 사용 예 (저장소 루트에서 실행):
     python scripts/create_admin.py alice            # 가입한 alice를 관리자로 지정 (없는 아이디면 비밀번호를 입력받아 새로 만듦)

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.database import Base, engine, get_db
+from app.core.database import Base, SessionLocal, engine, get_db
 from app.core.errors import register_error_handlers
 from app.core.logger import logger, LoggingMiddleware
 from app.core.migrations import upgrade_schema
@@ -17,6 +17,7 @@ from app.core.timeutil import utc_now
 from app.models.user import User  # noqa: F401
 from app.models.chat_log import ChatLog  # noqa: F401
 from app.models.request_log import RequestLog  # noqa: F401
+from app.services.admin_service import prepare_default_admin
 from app.services.ai_service import is_ai_configured
 from app.services.request_log_service import record_request
 
@@ -31,6 +32,12 @@ async def lifespan(app: FastAPI):
     logger.info(f"[{settings.PROJECT_NAME}] 애플리케이션 시작 중... DB 테이블 점검")
     Base.metadata.create_all(bind=engine)
     upgrade_schema(engine)  # [권태현] 이전 버전으로 만든 DB에 새 컬럼 추가
+    # [권태현] .env의 ADMIN_USERNAME·ADMIN_PASSWORD로 기본 관리자 계정 준비 (비밀번호가 비어 있으면 건너뜀)
+    db = SessionLocal()
+    try:
+        prepare_default_admin(db, settings.ADMIN_USERNAME, settings.ADMIN_PASSWORD)
+    finally:
+        db.close()
     logger.info("DB 초기화 완료")
     yield
     logger.info(f"[{settings.PROJECT_NAME}] 애플리케이션 종료")

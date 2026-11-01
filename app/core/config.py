@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     AI_BASE_URL: str = ""  # 커스텀/프록시 엔드포인트 (코디세이 콘솔 등)
     AI_MODEL_NAME: str = "gpt-4o-mini"
     AI_TIMEOUT_SECONDS: float = 10.0  # 타임아웃 기본 10초 명시
+
+    # [권태현] 기본 관리자 계정: 서버가 시작할 때 이 아이디를 관리자 계정으로 준비 (비밀번호가 비어 있으면 하지 않음)
+    # 비밀번호를 코드에 두지 않도록 .env에서 정함 (.env.example 예시값: admin / 1234)
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = ""
     
     model_config = SettingsConfigDict(
         env_file=".env",

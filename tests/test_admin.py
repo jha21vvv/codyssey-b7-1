@@ -7,12 +7,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+import app.main as main_module
 from app.main import app
+from app.core.config import settings
 from app.core.database import Base, get_db
 from app.core.timeutil import utc_now
 from app.models.chat_log import ChatLog
 from app.models.request_log import RequestLog
 from app.models.user import ADMIN_ROLE, USER_ROLE, User
+from app.services.admin_service import prepare_default_admin
 from app.services.ai_service import AIResult, FALLBACK_TIMEOUT_MESSAGE
 from app.services.auth_service import verify_password
 
@@ -476,3 +479,65 @@ def test_script_upgrades_old_db_before_granting(script, tmp_path):
 
     assert script.main(["alice", "--db", str(path)]) == 0
     assert read_users(path)["alice"].role == ADMIN_ROLE
+
+# -------------------------------------------------------------
+# 7. 기본 관리자 계정 (.env의 ADMIN_USERNAME, ADMIN_PASSWORD)
+# -------------------------------------------------------------
+def admin_login(password: str = "1234"):
+    return client.post("/api/auth/login", json={"username": "admin", "password": password})
+
+def test_default_admin_created_when_missing():
+    assert run_in_db(lambda db: prepare_default_admin(db, "admin", "1234")) == "created"
+    response = admin_login()
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == ADMIN_ROLE
+    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    assert client.get("/api/admin/summary", headers=headers).status_code == 200
+
+def test_default_admin_fixes_existing_account():
+    # 누군가 admin 아이디로 일반 가입해 두었어도, 설정한 비밀번호의 관리자 계정이 됨
+    login("admin")
+    assert run_in_db(lambda db: prepare_default_admin(db, "admin", "1234")) == "updated"
+    assert admin_login().json()["user"]["role"] == ADMIN_ROLE
+    assert admin_login("password123").status_code == 401  # 예전 비밀번호는 더 이상 안 됨
+
+def test_default_admin_unchanged_on_restart():
+    run_in_db(lambda db: prepare_default_admin(db, "admin", "1234"))
+    first_hash = run_in_db(lambda db: db.query(User).filter(User.username == "admin").one().hashed_password)
+    assert run_in_db(lambda db: prepare_default_admin(db, "admin", "1234")) == "unchanged"
+    assert run_in_db(lambda db: db.query(User).filter(User.username == "admin").one().hashed_password) == first_hash
+
+def test_default_admin_handles_non_bcrypt_hash():
+    run_in_db(lambda db: db.add(User(username="admin", hashed_password="not-a-bcrypt-hash")))
+    assert run_in_db(lambda db: prepare_default_admin(db, "admin", "1234")) == "updated"
+    assert admin_login().status_code == 200
+
+def test_default_admin_skipped_or_rejected():
+    # 비밀번호를 비우면 하지 않고, 회원가입 규칙에 맞지 않으면 만들지 않음
+    assert run_in_db(lambda db: prepare_default_admin(db, "admin", "")) is None
+    assert run_in_db(lambda db: prepare_default_admin(db, "admin", "123")) == "invalid"
+    assert run_in_db(lambda db: prepare_default_admin(db, "ad", "1234")) == "invalid"
+    assert run_in_db(lambda db: db.query(User).count()) == 0
+
+def test_server_start_prepares_default_admin(monkeypatch):
+    # 실제 서버 시작(lifespan)을 테스트 DB로 실행해 admin / 1234로 로그인되는지 확인
+    monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(settings, "ADMIN_USERNAME", "admin")
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", "1234")
+    with TestClient(app):
+        pass
+    response = admin_login()
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == ADMIN_ROLE
+    # 비밀번호는 bcrypt 해시로만 저장
+    stored = run_in_db(lambda db: db.query(User).filter(User.username == "admin").one().hashed_password)
+    assert stored != "1234" and verify_password("1234", stored)
+
+def test_server_start_without_admin_password_creates_nothing(monkeypatch):
+    monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(main_module, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(settings, "ADMIN_PASSWORD", "")
+    with TestClient(app):
+        pass
+    assert run_in_db(lambda db: db.query(User).count()) == 0
