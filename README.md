@@ -11,7 +11,7 @@
 * **🌐 서비스 접속 URL**: [https://undertaken-resume-anywhere-overall.trycloudflare.com](https://undertaken-resume-anywhere-overall.trycloudflare.com)
 * **📋 Swagger API 명세서**: [https://undertaken-resume-anywhere-overall.trycloudflare.com/docs](https://undertaken-resume-anywhere-overall.trycloudflare.com/docs)
 * **🔍 상태 점검 (Health Check)**: [https://undertaken-resume-anywhere-overall.trycloudflare.com/health](https://undertaken-resume-anywhere-overall.trycloudflare.com/health)
-* **🛠️ 운영 관리자 화면**: [https://undertaken-resume-anywhere-overall.trycloudflare.com/admin](https://undertaken-resume-anywhere-overall.trycloudflare.com/admin) (관리자 계정 필요, 6장 "관리자 계정 만들기" 참고)
+* **🛠️ 운영 관리자 화면**: [https://undertaken-resume-anywhere-overall.trycloudflare.com/admin](https://undertaken-resume-anywhere-overall.trycloudflare.com/admin) (기본 관리자 계정 `admin` / `1234`, 6장 "관리자 계정" 참고)
 
 > **💡 배포 안내**:
 > 로컬 서버 구동 후 `scripts/run_tunnel.sh` (또는 Windows의 `scripts\run_tunnel.ps1`)를 실행하면 Cloudflare Tunnel을 통해 즉시 외부 접속이 가능하며, Render/PaaS 배포용 `Procfile`도 함께 제공됩니다.
@@ -591,21 +591,28 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 | `AI_BASE_URL` | *(빈 문자열)* | 선택 | 코디세이 AI 콘솔 등 프록시 주소 (비우면 OpenAI/Gemini 공식 주소) |
 | `AI_MODEL_NAME` | `gpt-4o-mini` | 선택 | 사용할 AI 모델명 (`gpt-4o-mini`, `gemini-1.5-flash` 등) |
 | `AI_TIMEOUT_SECONDS` | `10.0` | 선택 | AI API 비동기 호출 타임아웃 제한 (초 단위) |
+| `ADMIN_USERNAME` | `admin` | 선택 | 기본 관리자 계정 아이디 (서버가 시작할 때 관리자 계정으로 준비) |
+| `ADMIN_PASSWORD` | *(빈 문자열)*, `.env.example`은 `1234` | 선택 | 기본 관리자 계정 비밀번호. 비우면 자동 준비를 하지 않음 |
 
 * 이전 버전의 `ADMIN_API_KEY`는 관리자 계정 방식으로 바뀌어 쓰지 않습니다. (`.env`에 남아 있어도 무시되어 오류가 나지 않습니다.)
 
 > **🔐 민감정보 보호 규칙**:
 > `.gitignore`에 `.env`, `*.db`, `__pycache__/`가 등록되어 있어 실제 API Key와 비밀키는 절대 GitHub 저장소에 업로드되지 않습니다.
 
-### 관리자 계정 만들기
-관리자는 웹에서 스스로 될 수 없고, 서버(DB 파일)에 접근할 수 있는 운영자만 `scripts/create_admin.py`로 지정합니다. 저장소 루트에서 실행합니다.
+### 관리자 계정
+**기본 관리자 계정**: 서버가 시작할 때 `.env`의 `ADMIN_USERNAME`·`ADMIN_PASSWORD`로 관리자 계정을 준비합니다. `.env.example`을 복사해 `.env`를 만들었다면 **아이디 `admin`, 비밀번호 `1234`**로 `/admin`에 로그인하면 됩니다.
+* 계정이 없으면 새로 만들고, 같은 아이디가 이미 있으면 관리자 역할과 비밀번호를 설정값으로 맞춥니다. 서버 로그에 `[기본 관리자 계정] 새로 만듦`처럼 남습니다.
+* 비밀번호는 코드가 아니라 `.env`에 두고, DB에는 bcrypt 해시로만 저장합니다. 로그에도 남기지 않습니다.
+* 관리자는 모든 사용자의 대화와 요청 IP를 볼 수 있습니다. 외부에 공개한 서버는 평가가 끝나면 `ADMIN_PASSWORD`를 바꾸고 서버를 다시 시작하세요. 비밀번호를 비우면 자동 준비를 하지 않습니다(이미 만든 계정의 권한은 아래 `--revoke`로 해제).
+
+**다른 아이디를 관리자로 지정**: 관리자는 웹에서 스스로 될 수 없고, 서버(DB 파일)에 접근할 수 있는 운영자만 `scripts/create_admin.py`로 지정합니다. 저장소 루트에서 실행합니다.
 
 ```bash
 # 웹 화면에서 회원가입한 아이디를 관리자로 지정
 python scripts/create_admin.py evaluator01
 
 # 없는 아이디면 비밀번호를 두 번 입력받아 새 관리자 계정을 만듦 (회원가입과 같은 아이디·비밀번호 규칙)
-python scripts/create_admin.py admin
+python scripts/create_admin.py manager01
 
 # 관리자 목록 / 관리자 권한 해제 / 다른 위치의 DB 파일 지정
 python scripts/create_admin.py --list
@@ -695,7 +702,7 @@ curl -X GET "http://localhost:8080/api/admin/chat-logs?status=FAILED&limit=10" \
 ```
 
 ### 방법 4: 운영 관리자 화면 (`/admin`)
-관리자 계정(6장 "관리자 계정 만들기")으로 `http://localhost:8080/admin`에 로그인하면, `대화 로그` 탭에서 모든 사용자의 질문·응답·성공/실패·실패 종류·AI 응답 시간을 화면으로 확인할 수 있습니다. 요청 ID를 누르면 그 요청의 요청 로그와 서버 로그 검색 명령까지 함께 봅니다.
+관리자 계정(기본 `admin` / `1234`, 6장 "관리자 계정")으로 `http://localhost:8080/admin`에 로그인하면, `대화 로그` 탭에서 모든 사용자의 질문·응답·성공/실패·실패 종류·AI 응답 시간을 화면으로 확인할 수 있습니다. 요청 ID를 누르면 그 요청의 요청 로그와 서버 로그 검색 명령까지 함께 봅니다.
 
 ---
 
@@ -776,7 +783,7 @@ curl -X GET "http://localhost:8080/api/admin/chat-logs?status=FAILED&limit=10" \
 
 ## 🧪 10. 테스트 실행 및 무결성 검증
 
-저장소에는 인프라, 인증, AI 파이프라인, 대화 로그, 관리자 기능, 웹 UI를 검증하는 단위 및 통합 테스트 슈트(총 98개 테스트)가 포함되어 있습니다.
+저장소에는 인프라, 인증, AI 파이프라인, 대화 로그, 관리자 기능, 웹 UI를 검증하는 단위 및 통합 테스트 슈트(총 105개 테스트)가 포함되어 있습니다.
 
 ```bash
 # 전체 테스트 실행
@@ -796,7 +803,7 @@ pytest -v
 * `tests/test_errors.py`: 공통 오류 형식(401·404·405·409·422·500)과 한국어 안내, 입력값·내부 예외 미노출 검증
 * `tests/test_chat_failures.py`: AI 장애별 상태 코드(504·502·503), 빈 응답 처리, 대화 로그 추적 정보, DB 실패 로그의 개인정보 보호 검증
 * `tests/test_migrations.py`: 이전 버전 DB에 새 컬럼(대화 로그 추적 컬럼, `users.role`)을 추가하는 마이그레이션 검증
-* `tests/test_admin.py`: 관리자 권한(401·403, 권한 해제 즉시 반영), 관리자 API(요약 통계·요청 로그 필터·요청 ID 추적·대화 로그), 관리자 지정 스크립트 검증
+* `tests/test_admin.py`: 관리자 권한(401·403, 권한 해제 즉시 반영), 관리자 API(요약 통계·요청 로그 필터·요청 ID 추적·대화 로그), 기본 관리자 계정 자동 준비, 관리자 지정 스크립트 검증
 
 ---
 
@@ -965,16 +972,18 @@ pytest -v
 ---
 
 ### Step 9. 관리자 계정과 운영 관리자 화면 확인 (운영·로그 조회)
-1. **관리자 지정**: 서버를 실행한 저장소 루트에서 Step 3에서 만든 계정을 관리자로 지정합니다.
-   ```powershell
-   # Windows:
-   .\.venv\Scripts\python scripts\create_admin.py evaluator01
+1. **관리자 로그인**: 브라우저에서 `http://localhost:8080/admin`에 접속해 기본 관리자 계정 **`admin` / `1234`**로 로그인합니다.
+   - `.env.example`을 복사해 만든 `.env`의 기본값이며, 서버가 시작할 때 자동으로 준비됩니다. (서버 로그의 `[기본 관리자 계정] 새로 만듦` 확인)
+   - Step 3에서 만든 계정을 관리자로 쓰려면 서버를 실행한 저장소 루트에서 지정합니다.
+     ```powershell
+     # Windows:
+     .\.venv\Scripts\python scripts\create_admin.py evaluator01
 
-   # Mac / Linux:
-   python scripts/create_admin.py evaluator01
-   # -> [관리자 지정] user_id=1, username=evaluator01
-   ```
-2. 브라우저에서 `http://localhost:8080/admin`에 접속합니다. (챗봇 화면을 새로 열면 머리줄의 `관리자` 링크로도 이동할 수 있습니다.)
+     # Mac / Linux:
+     python scripts/create_admin.py evaluator01
+     # -> [관리자 지정] user_id=1, username=evaluator01
+     ```
+2. 관리자 계정으로 챗봇 화면(`/`)에 로그인하면 머리줄의 `관리자` 링크로도 관리자 화면에 이동할 수 있습니다.
 3. **검증 포인트**:
    - **서비스 상태** 탭: 헬스체크 `정상`, 최근 24시간 요청 수·서버 오류율(5xx)·평균/p95 응답 시간, 대화 실패율, AI 평균 응답 시간, Step 6에서 만든 실패가 `대화 실패 종류`(AI 응답 시간 초과)와 `최근 오류 요청`(504)에 보이는지 확인
    - `많이 난 오류 코드`에서 `AI_TIMEOUT`을 누르면 **요청 로그** 탭에 같은 요청(`504 POST /api/chat`)만 표시
@@ -991,7 +1000,7 @@ pytest -v
 ---
 
 ### Step 10. 전체 자동화 단위 테스트 실행 (과제 요구사항 7)
-프로젝트 전 영역의 기능 무결성을 보증하는 98개 테스트를 일괄 실행합니다:
+프로젝트 전 영역의 기능 무결성을 보증하는 105개 테스트를 일괄 실행합니다:
 ```powershell
 # Windows:
 .\.venv\Scripts\pytest -v
@@ -999,4 +1008,4 @@ pytest -v
 # Mac / Linux:
 pytest -v
 ```
-* **결과**: `98 passed` 확인 (인증, 챗봇, AI 장애 처리, DB 영속화, 요청 로그, 오류 형식, 헬스체크, 관리자 권한·관리자 API, 웹 화면 서빙 100% 통과)
+* **결과**: `105 passed` 확인 (인증, 챗봇, AI 장애 처리, DB 영속화, 요청 로그, 오류 형식, 헬스체크, 관리자 권한·관리자 API, 웹 화면 서빙 100% 통과)
