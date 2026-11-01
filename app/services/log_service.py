@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models.chat_log import ChatLog
 
@@ -8,7 +8,16 @@ from app.models.chat_log import ChatLog
 로그 조회 API(/api/logs)에서도 사용합니다.
 """
 
-def save_chat_log(user_id: int, prompt: str, response: str, status: str, db: Session) -> ChatLog:
+def save_chat_log(
+    user_id: int,
+    prompt: str,
+    response: str,
+    status: str,
+    db: Session,
+    request_id: Optional[str] = None,
+    latency_ms: Optional[int] = None,
+    error_type: Optional[str] = None,
+) -> ChatLog:
     """
     [과제 요구사항: 대화 로그 누적 저장] 사용자 질문과 AI 응답을 DB에 저장
     저장에 실패하면 세션을 롤백한 뒤 예외를 그대로 올려,
@@ -19,6 +28,9 @@ def save_chat_log(user_id: int, prompt: str, response: str, status: str, db: Ses
         prompt=prompt,
         response=response,
         status=status,
+        request_id=request_id,
+        latency_ms=latency_ms,
+        error_type=error_type,
     )
     # [안내서 대비 변경] 안내서 코드에 없는 롤백 추가: 저장에 실패해도 같은 세션을 계속 쓸 수 있게 함
     try:
@@ -43,18 +55,38 @@ def get_user_chat_logs(user_id: int, limit: int, db: Session) -> List[ChatLog]:
         .all()
     )
 
+def _filtered_chat_logs(db: Session, status: Optional[str], user_id: Optional[int]):
+    """[권태현] 관리자 대화 로그 조회의 상태·사용자 조건 (목록과 전체 건수가 같은 조건을 쓰도록 한곳에서 만듦)"""
+    query = db.query(ChatLog)
+    if status:
+        query = query.filter(ChatLog.status == status)
+    if user_id is not None:
+        query = query.filter(ChatLog.user_id == user_id)
+    return query
+
 # [안내서 대비 변경] 안내서 시그니처는 (skip=0, limit=100, db=None)이지만,
 # db 없이 호출되면 내부에서 AttributeError가 나므로 세 인자를 모두 필수로 받음
-# (skip/limit 기본값은 로그 조회 라우터에서 지정)
-def get_all_chat_logs(skip: int, limit: int, db: Session) -> List[ChatLog]:
+# (skip/limit 기본값은 관리자 API에서 지정)
+# [권태현] 관리자 화면의 "실패만 보기"·사용자 검색을 위해 status, user_id 조건을 선택으로 받음
+def get_all_chat_logs(
+    skip: int,
+    limit: int,
+    db: Session,
+    status: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> List[ChatLog]:
     """
     [관리자/평가자 확인용] 전체 사용자의 대화 로그를 최신순으로 페이지 단위 조회
     """
     return (
-        db.query(ChatLog)
+        _filtered_chat_logs(db, status, user_id)
         # [안내서 대비 변경] get_user_chat_logs와 같은 기준으로 정렬 (같은 시각이면 id 역순)
         .order_by(ChatLog.created_at.desc(), ChatLog.id.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
+
+def count_all_chat_logs(db: Session, status: Optional[str] = None, user_id: Optional[int] = None) -> int:
+    """[권태현] get_all_chat_logs와 같은 조건의 전체 건수 (관리자 화면 페이지 표시용)"""
+    return _filtered_chat_logs(db, status, user_id).count()

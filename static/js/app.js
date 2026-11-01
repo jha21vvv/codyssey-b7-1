@@ -9,7 +9,10 @@
   // [안내서 대비 변경] 안내서 "받아올 것" 항목의 "token" 대신, 안내서 코드와 신재은 안내서에 맞춰 "access_token" 키로 저장
   const TOKEN_KEY = "access_token";
   const USERNAME_KEY = "username";
+  const ROLE_KEY = "role"; // "user" 또는 "admin" (관리자에게만 관리자 화면 링크 표시)
   const MAX_PROMPT_LENGTH = 1000; // 조명환 ChatRequest·validate_prompt와 같은 최대 길이
+  // AI 장애 응답 상태 코드: 502(AI 쪽 오류), 503(AI 키 미설정), 504(AI 응답 시간 초과)
+  const AI_FAILURE_STATUSES = [502, 503, 504];
 
   const $ = (selector) => document.querySelector(selector);
   const chatMessages = $("#chat-messages");
@@ -40,14 +43,21 @@
   // ---------- 로그인 상태 저장 ----------
   const getToken = () => localStorage.getItem(TOKEN_KEY);
 
-  function saveAuth(token, username) {
+  function saveAuth(token, username, role) {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USERNAME_KEY, username);
+    saveRole(role);
+  }
+
+  function saveRole(role) {
+    if (role) localStorage.setItem(ROLE_KEY, role);
+    else localStorage.removeItem(ROLE_KEY);
   }
 
   function clearAuth() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USERNAME_KEY);
+    localStorage.removeItem(ROLE_KEY);
   }
 
   // ---------- API 통신 ----------
@@ -105,6 +115,9 @@
   // 서버 쪽 문제(5xx)이거나 API가 아직 없는 경우(404·405)는 입력값 문제처럼 안내하지 않음
   const isServerProblem = (status) => status >= 500 || status === 404 || status === 405;
 
+  // 오류 응답의 요청 ID를 안내 문구에 붙임 (관리자가 요청 로그·서버 로그에서 같은 ID로 찾을 수 있음)
+  const requestIdText = (data) => (data && data.request_id ? `, 요청 ID ${data.request_id}` : "");
+
   // ---------- 상단 에러 안내 배너 ----------
   // 네트워크·서버 오류와 세션 만료처럼 말풍선만으로는 놓치기 쉬운 상황을 화면 위쪽에 알림
   // (다음 질문이 성공하거나 다시 로그인하면 자동으로 닫힘)
@@ -133,7 +146,16 @@
       name.className = "auth-user-name";
       name.textContent = `${localStorage.getItem(USERNAME_KEY) || "사용자"}님`;
       user.append(avatar, name);
-      authInfo.append(user, createButton("로그아웃", "btn btn-light", logout));
+      authInfo.append(user);
+      // 화면에 링크를 보여주는 것일 뿐, 관리자 데이터는 서버가 관리자 계정인지 다시 확인한 뒤에만 보냄
+      if (localStorage.getItem(ROLE_KEY) === "admin") {
+        const adminLink = document.createElement("a");
+        adminLink.className = "btn btn-light admin-link";
+        adminLink.href = "/admin";
+        adminLink.textContent = "관리자";
+        authInfo.append(adminLink);
+      }
+      authInfo.append(createButton("로그아웃", "btn btn-light", logout));
     } else {
       authInfo.append(
         createButton("로그인", "btn btn-light", () => openAuthModal("login")),
@@ -209,7 +231,7 @@
       });
       if (!res.ok) {
         setFormMessage(loginMessage, isServerProblem(res.status)
-          ? `서버 오류로 로그인하지 못했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`
+          ? `서버 오류로 로그인하지 못했습니다 (HTTP ${res.status}${requestIdText(data)}). 잠시 후 다시 시도해주세요.`
           : getErrorMessage(data, "아이디 또는 비밀번호를 확인해주세요."));
         return;
       }
@@ -217,7 +239,7 @@
         setFormMessage(loginMessage, "로그인 응답을 확인하지 못했습니다. 잠시 후 다시 시도해주세요.");
         return;
       }
-      saveAuth(data.access_token, (data.user && data.user.username) || username);
+      saveAuth(data.access_token, (data.user && data.user.username) || username, data.user && data.user.role);
       loginForm.reset();
       closeAuthModal();
       hideBanner();
@@ -253,7 +275,7 @@
       if (!res.ok) {
         let message;
         if (isServerProblem(res.status)) {
-          message = `서버 오류로 가입하지 못했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`;
+          message = `서버 오류로 가입하지 못했습니다 (HTTP ${res.status}${requestIdText(data)}). 잠시 후 다시 시도해주세요.`;
         } else if (res.status === 422) {
           message = getRegisterValidationMessage(data);
         } else {
@@ -427,16 +449,18 @@
         setMessageContent(reply, getErrorMessage(data, `질문은 1자 이상 ${MAX_PROMPT_LENGTH}자 이하로 입력해주세요.`), "FAILED");
         return;
       }
-      if (!res.ok || !data || typeof data.response !== "string") {
+      // AI 장애(502·503·504)면 서버가 안내 문구를 주고 대화를 FAILED로 저장하므로 실패 말풍선으로 표시
+      const aiFailed = AI_FAILURE_STATUSES.includes(res.status) && data && typeof data.response === "string";
+      if (!aiFailed && (!res.ok || !data || typeof data.response !== "string")) {
         setMessageContent(reply, "서버에서 오류가 발생했습니다. 잠시 후 다시 시도해주세요.", "FAILED");
-        showBanner(`서버 오류가 발생했습니다 (HTTP ${res.status}). 잠시 후 다시 시도해주세요.`);
+        showBanner(`서버 오류가 발생했습니다 (HTTP ${res.status}${requestIdText(data)}). 잠시 후 다시 시도해주세요.`);
         return;
       }
-      // AI 호출이 실패·타임아웃이어도 서버는 200 + status "FAILED" + 안내 문구를 주므로 같은 화면에 그대로 표시
-      setMessageContent(reply, data.response, data.status);
+      const resultStatus = aiFailed ? "FAILED" : data.status;
+      setMessageContent(reply, data.response, resultStatus);
       hideBanner();
       // 서버는 FAILED 응답도 대화 로그로 저장하므로 사이드바에도 바로 추가
-      historyList.prepend(createHistoryItem(entryKey, prompt, data.status, new Date()));
+      historyList.prepend(createHistoryItem(entryKey, prompt, resultStatus, new Date()));
       updateHistoryStatus();
     } catch {
       setMessageContent(reply, "⚠️ 네트워크 통신 오류가 발생했습니다.", "FAILED");
@@ -576,6 +600,23 @@
     }
   }
 
+  // ---------- 내 정보 다시 확인 (GET /api/auth/me) ----------
+  // 관리자 지정·해제가 다시 로그인하지 않아도 머리줄 링크에 반영되도록, 화면을 열 때 역할을 다시 받아 옴
+  async function refreshUser() {
+    const requestToken = getToken();
+    if (!requestToken) return;
+    try {
+      const { res, data } = await apiRequest("/api/auth/me", { auth: true });
+      // 401(로그인 만료)은 지난 대화 조회(loadHistory)가 안내하므로 여기서는 넘어감
+      if (getToken() !== requestToken || !res.ok || !data || !data.username) return;
+      localStorage.setItem(USERNAME_KEY, data.username);
+      saveRole(data.role);
+      renderAuthInfo();
+    } catch {
+      // 머리줄 갱신에 실패해도 챗봇 사용에는 영향 없음
+    }
+  }
+
   // ---------- 모바일 사이드바 ----------
   function openSidebar() {
     document.body.classList.add("sidebar-open");
@@ -643,4 +684,5 @@
   updateAuthState();
   updateHistoryStatus();
   loadHistory();
+  refreshUser();
 })();

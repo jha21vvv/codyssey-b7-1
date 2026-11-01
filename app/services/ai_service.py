@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 import httpx
 from app.core.config import settings
 from app.core.logger import logger
@@ -18,6 +18,32 @@ DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest"
 
 FALLBACK_ERROR_MESSAGE = "현재 AI 서비스가 원활하지 않습니다. 잠시 후 다시 시도해주세요."
 FALLBACK_TIMEOUT_MESSAGE = "AI 응답 시간이 초과되었습니다. 잠시 후 다시 질문해주세요."
+
+
+class AIResult(NamedTuple):
+    """
+    [권태현] AI 호출 결과
+    실패하면 실패 종류(error_type)를 함께 돌려줘, 채팅 API의 상태 코드 결정과 대화 로그 기록에 사용
+    error_type: TIMEOUT, UPSTREAM_ERROR, BAD_RESPONSE, CONNECTION_ERROR, UNEXPECTED_ERROR, NOT_CONFIGURED
+    """
+    reply: str
+    status: str  # "SUCCESS" 또는 "FAILED"
+    error_type: Optional[str] = None
+
+
+def _failed(error_type: str, message: str = FALLBACK_ERROR_MESSAGE) -> AIResult:
+    return AIResult(message, "FAILED", error_type)
+
+
+def _reply_text(value: Any) -> Optional[str]:
+    """답변이 비어 있지 않은 문자열일 때만 사용 (null·빈 답변을 성공으로 넘기면 저장·응답 단계에서 500이 남)"""
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def is_ai_configured() -> bool:
+    """AI 키가 실제로 설정됐는지 (비어 있거나 .env.example의 예시 값이면 False)"""
+    api_key = (settings.AI_API_KEY or "").strip()
+    return bool(api_key) and api_key != "your-actual-api-key-here"
 
 
 def resolve_ai_endpoint_and_model() -> Tuple[str, str]:
@@ -97,7 +123,7 @@ async def _call_anthropic_api(
     api_url: str,
     model_name: str,
     messages: List[Dict[str, str]]
-) -> Tuple[str, str]:
+) -> AIResult:
     """Anthropic Claude 형식 호출 헬퍼"""
     headers = {
         "x-api-key": settings.AI_API_KEY.strip(),
@@ -120,20 +146,25 @@ async def _call_anthropic_api(
     }
 
     res = await client.post(api_url, headers=headers, json=payload)
-    if res.status_code == 200:
-        data = res.json()
-        reply = data["content"][0]["text"]
-        logger.info("[AI 응답 수신] [Anthropic AI 응답 수신 성공] status=200")
-        return reply, "SUCCESS"
-    logger.error(f"[AI 응답 실패] [Anthropic 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
-    return FALLBACK_ERROR_MESSAGE, "FAILED"
+    if res.status_code != 200:
+        logger.error(f"[AI 응답 실패] [Anthropic 호출 실패] 상태코드={res.status_code}, 본문={res.text[:300]}")
+        return _failed("UPSTREAM_ERROR")
+    try:
+        reply = _reply_text(res.json()["content"][0]["text"])
+    except (ValueError, KeyError, IndexError, TypeError):
+        reply = None
+    if reply is None:
+        logger.error("[AI 응답 실패] [AI 응답 형식 오류] Anthropic 응답에 답변 내용이 없습니다.")
+        return _failed("BAD_RESPONSE")
+    logger.info("[AI 응답 수신] [Anthropic AI 응답 수신 성공] status=200")
+    return AIResult(reply, "SUCCESS")
 
 
-async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
+async def call_ai_api(messages: List[Dict[str, str]]) -> AIResult:
     """
     [과제 요구사항 58, 70, 101] AI API 호출 및 타임아웃 방어
     OpenAI, Google Gemini, Anthropic 및 코디세이 프록시를 모두 지원합니다.
-    Returns: (응답텍스트, 상태코드 문자열 "SUCCESS" | "FAILED")
+    Returns: AIResult(응답 텍스트, "SUCCESS" | "FAILED", 실패 종류)
     """
     api_url, model_name = resolve_ai_endpoint_and_model()
     logger.info(
@@ -141,9 +172,9 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
         f"엔드포인트={api_url}, 메시지 수={len(messages)}, 타임아웃={settings.AI_TIMEOUT_SECONDS}초"
     )
 
-    if not settings.AI_API_KEY or settings.AI_API_KEY.strip() in ("", "your-actual-api-key-here"):
+    if not is_ai_configured():
         logger.error("[AI 응답 실패] [AI 호출 실패] 유효한 AI_API_KEY가 설정되지 않았습니다.")
-        return FALLBACK_ERROR_MESSAGE, "FAILED"
+        return _failed("NOT_CONFIGURED")
 
     is_anthropic = api_url.endswith("/messages") or (
         model_name.lower().startswith("claude") and "api.openai.com" not in api_url
@@ -165,21 +196,30 @@ async def call_ai_api(messages: List[Dict[str, str]]) -> Tuple[str, str]:
             }
             res = await client.post(api_url, headers=headers, json=payload)
             if res.status_code == 200:
-                data = res.json()
-                reply = data["choices"][0]["message"]["content"]
+                try:
+                    reply = _reply_text(res.json()["choices"][0]["message"]["content"])
+                except (ValueError, KeyError, IndexError, TypeError):
+                    reply = None
+                if reply is None:
+                    logger.error("[AI 응답 실패] [AI 응답 형식 오류] 응답에 답변 내용이 없습니다.")
+                    return _failed("BAD_RESPONSE")
                 logger.info("[AI 응답 수신] [AI 응답 수신 성공] status=200")
-                return reply, "SUCCESS"
+                return AIResult(reply, "SUCCESS")
 
             # 코디세이 키가 Anthropic 호환 키일 경우 자동 폴백
             if res.status_code == 403 and "OpenAI-compatible" in res.text and "copa.codyssey.kr" in api_url:
                 logger.info("[AI 자동 전환] 발급된 키가 Anthropic 호환 키이므로 Claude 엔드포인트(/v1/messages)로 자동 전환합니다.")
                 return await _call_anthropic_api(client, "https://copa.codyssey.kr/v1/messages", "claude-haiku-4", messages)
 
-            logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text}")
-            return FALLBACK_ERROR_MESSAGE, "FAILED"
+            logger.error(f"[AI 응답 실패] [AI 호출 실패] 상태코드={res.status_code}, 본문={res.text[:300]}")
+            return _failed("UPSTREAM_ERROR")
     except httpx.TimeoutException:
         logger.error(f"[AI 응답 실패] [AI 타임아웃] {settings.AI_TIMEOUT_SECONDS}초 초과")
-        return FALLBACK_TIMEOUT_MESSAGE, "FAILED"
+        return _failed("TIMEOUT", FALLBACK_TIMEOUT_MESSAGE)
+    # [권태현] 예외 내용(영어·내부 정보)은 서버 로그에만 남기고, 사용자에게는 안내 문구만 보냄
+    except httpx.RequestError as e:
+        logger.error(f"[AI 응답 실패] [AI 통신 예외 발생] {type(e).__name__}: {e}")
+        return _failed("CONNECTION_ERROR")
     except Exception as e:
-        logger.error(f"[AI 응답 실패] [AI 통신 예외 발생] {str(e)}")
-        return f"서비스 처리 중 일시적인 오류가 발생했습니다: {str(e)}", "FAILED"
+        logger.error(f"[AI 응답 실패] [AI 처리 중 예외 발생] {type(e).__name__}: {e}")
+        return _failed("UNEXPECTED_ERROR")

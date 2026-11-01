@@ -32,6 +32,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
+    role: str  # [권태현] "user" 또는 "admin" (웹 화면이 관리자에게만 관리자 화면 링크를 보여줄 때 사용)
 
     class Config:
         from_attributes = True

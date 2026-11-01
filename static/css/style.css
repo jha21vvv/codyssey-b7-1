@@ -91,6 +91,11 @@ body {
   outline-offset: 2px;
 }
 
+/* 링크(a)로 만든 버튼도 버튼처럼 밑줄 없이 표시 (관리자 화면 링크 등) */
+a.btn {
+  text-decoration: none;
+}
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -967,6 +972,13 @@ body {
 
   .login-notice {
     margin: 0 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 관리자 링크까지 있으면 머리줄이 좁아지므로 아이디 글자는 숨기고 프로필 원만 남김 */
+  .auth-info:has(.admin-link) .auth-user-name {
+    display: none;
   }
 }
 

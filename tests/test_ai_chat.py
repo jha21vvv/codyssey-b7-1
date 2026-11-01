@@ -15,6 +15,7 @@ from app.models.chat_log import ChatLog
 from app.models.user import User
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services.ai_service import (
+    AIResult,
     DEFAULT_GEMINI_MODEL,
     FALLBACK_ERROR_MESSAGE,
     FALLBACK_TIMEOUT_MESSAGE,
@@ -150,9 +151,10 @@ def test_call_ai_api_success(monkeypatch):
     mock_client_ctx.__aexit__.return_value = None
 
     with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
-        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+        reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
 
     assert status == "SUCCESS"
+    assert error_type is None
     assert reply == "안녕하세요! 무엇을 도와드릴까요?"
 
 
@@ -174,9 +176,10 @@ def test_call_ai_api_gemini_key_auto_routing(monkeypatch):
     mock_client_ctx.__aexit__.return_value = None
 
     with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
-        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+        reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
 
     assert status == "SUCCESS"
+    assert error_type is None
     assert reply == "Gemini 응답입니다."
     called_url = mock_client_instance.post.call_args.args[0]
     called_payload = mock_client_instance.post.call_args.kwargs["json"]
@@ -203,9 +206,10 @@ def test_call_ai_api_custom_base_url(monkeypatch):
     mock_client_ctx.__aexit__.return_value = None
 
     with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
-        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+        reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
 
     assert status == "SUCCESS"
+    assert error_type is None
     assert reply == "코디세이 AI 응답입니다."
     called_url = mock_client_instance.post.call_args.args[0]
     assert called_url == "https://proxy.codyssey.kr/v1/chat/completions"
@@ -230,9 +234,10 @@ def test_call_ai_api_codyssey_key_auto_routing(monkeypatch):
     mock_client_ctx.__aexit__.return_value = None
 
     with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
-        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
+        reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "안녕"}]))
 
     assert status == "SUCCESS"
+    assert error_type is None
     assert reply == "코디세이 자동 라우팅 응답"
     called_url = mock_client_instance.post.call_args.args[0]
     called_payload = mock_client_instance.post.call_args.kwargs["json"]
@@ -251,10 +256,11 @@ def test_call_ai_api_timeout_fallback(monkeypatch):
     mock_client_ctx.__aexit__.return_value = None
 
     with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
-        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "질문"}]))
+        reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "질문"}]))
 
     assert status == "FAILED"
     assert reply == FALLBACK_TIMEOUT_MESSAGE
+    assert error_type == "TIMEOUT"
 
 
 def test_call_ai_api_http_error_fallback(monkeypatch):
@@ -272,20 +278,22 @@ def test_call_ai_api_http_error_fallback(monkeypatch):
     mock_client_ctx.__aexit__.return_value = None
 
     with patch("app.services.ai_service.httpx.AsyncClient", return_value=mock_client_ctx):
-        reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "질문"}]))
+        reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "질문"}]))
 
     assert status == "FAILED"
     assert reply == FALLBACK_ERROR_MESSAGE
+    assert error_type == "UPSTREAM_ERROR"
 
 
 def test_call_ai_api_missing_key_fallback(monkeypatch):
     """AI_API_KEY 미설정 시 외부 네트워크 호출 없이 즉시 FAILED 및 안내 문구 반환 검증"""
     monkeypatch.setattr(settings, "AI_API_KEY", "")
 
-    reply, status = asyncio.run(call_ai_api([{"role": "user", "content": "질문"}]))
+    reply, status, error_type = asyncio.run(call_ai_api([{"role": "user", "content": "질문"}]))
 
     assert status == "FAILED"
     assert reply == FALLBACK_ERROR_MESSAGE
+    assert error_type == "NOT_CONFIGURED"
 
 
 # -------------------------------------------------------------
@@ -311,7 +319,7 @@ def test_chat_endpoint_success_and_context_accumulation():
 
     with patch(
         "app.api.chat_router.call_ai_api",
-        new=AsyncMock(side_effect=[("첫 번째 AI 답변", "SUCCESS"), ("두 번째 AI 답변", "SUCCESS")]),
+        new=AsyncMock(side_effect=[AIResult("첫 번째 AI 답변", "SUCCESS"), AIResult("두 번째 AI 답변", "SUCCESS")]),
     ) as mock_call_ai:
         res1 = client.post("/api/chat", json={"prompt": "  첫 번째 질문  "}, headers=headers)
         assert res1.status_code == 200
@@ -337,19 +345,21 @@ def test_chat_endpoint_success_and_context_accumulation():
 
 
 def test_chat_endpoint_timeout_and_db_error_never_returns_500():
-    """AI 타임아웃 또는 DB 저장 예외가 발생해도 500 에러 없이 200 OK와 안내 문구를 반환하는지 검증 (규칙 2)"""
+    """AI 타임아웃 또는 DB 저장 예외가 발생해도 500 없이 504와 안내 문구를 반환하는지 검증 (규칙 2: 서버는 멈추지 않음)"""
     headers = get_auth_headers("resilienceuser")
 
     with patch(
         "app.api.chat_router.call_ai_api",
-        new=AsyncMock(return_value=(FALLBACK_TIMEOUT_MESSAGE, "FAILED")),
+        new=AsyncMock(return_value=AIResult(FALLBACK_TIMEOUT_MESSAGE, "FAILED", "TIMEOUT")),
     ), patch(
         "app.api.chat_router.save_chat_log",
         side_effect=RuntimeError("DB disk full simulated error"),
     ):
         res = client.post("/api/chat", json={"prompt": "타임아웃 및 DB 장애 테스트"}, headers=headers)
 
-    assert res.status_code == 200
+    assert res.status_code == 504
     body = res.json()
+    assert body["code"] == "AI_TIMEOUT"
     assert body["status"] == "FAILED"
     assert body["response"] == FALLBACK_TIMEOUT_MESSAGE
+    assert body["detail"] == FALLBACK_TIMEOUT_MESSAGE

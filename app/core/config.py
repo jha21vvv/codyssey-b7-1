@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     AI_MODEL_NAME: str = "gpt-4o-mini"
     AI_TIMEOUT_SECONDS: float = 10.0  # 타임아웃 기본 10초 명시
 
-    # 전체 대화 로그 조회 키 (권태현 로그 API의 GET /api/logs/admin에서 사용, 비어 있으면 기능 꺼짐)
-    ADMIN_API_KEY: str = ""
+    # [권태현] 기본 관리자 계정: 서버가 시작할 때 이 아이디를 관리자 계정으로 준비 (비밀번호가 비어 있으면 하지 않음)
+    # 비밀번호를 코드에 두지 않도록 .env에서 정함 (.env.example 예시값: admin / 1234)
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = ""
     
     model_config = SettingsConfigDict(
         env_file=".env",
